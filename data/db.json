@@ -1,0 +1,92 @@
+{
+  "users": [
+    {
+      "id": "mgr-001",
+      "full_name": "רנ\"ג דוד כהן",
+      "role": "manager",
+      "phone": "050-0000001",
+      "status": "available",
+      "created_at": "2026-03-23T11:16:01.890Z"
+    },
+    {
+      "id": "d-001",
+      "full_name": "רב\"ט יעקב לוי",
+      "role": "driver",
+      "phone": "050-0000101",
+      "status": "available",
+      "created_at": "2026-03-23T11:16:01.890Z"
+    },
+    {
+      "id": "d-002",
+      "full_name": "סמל שרה כהן",
+      "role": "driver",
+      "phone": "050-0000102",
+      "status": "available",
+      "created_at": "2026-03-23T11:16:01.890Z"
+    },
+    {
+      "id": "d-003",
+      "full_name": "טוראי דוד מזרחי",
+      "role": "driver",
+      "phone": "050-0000103",
+      "status": "available",
+      "created_at": "2026-03-23T11:16:01.890Z"
+    },
+    {
+      "id": "d-004",
+      "full_name": "רב\"ט נועה ברקת",
+      "role": "driver",
+      "phone": "050-0000104",
+      "status": "available",
+      "created_at": "2026-03-23T11:16:01.890Z"
+    },
+    {
+      "id": "d-005",
+      "full_name": "סמל ראשון אמיר גל",
+      "role": "driver",
+      "phone": "050-0000105",
+      "status": "offline",
+      "created_at": "2026-03-23T11:16:01.890Z"
+    },
+    {
+      "id": "d-006",
+      "full_name": "טוראי מיכל אדרי",
+      "role": "driver",
+      "phone": "050-0000106",
+      "status": "available",
+      "created_at": "2026-03-23T11:16:01.890Z"
+    }
+  ],
+  "missions": [
+    {
+      "pickup_location": "גף",
+      "destination": "דתק 3",
+      "passengers": 2,
+      "priority": "normal",
+      "status": "completed",
+      "broadcast": true,
+      "assigned_driver_id": null,
+      "created_by": "mgr-001",
+      "created_at": "2026-03-23T11:16:38.451Z",
+      "accepted_at": null,
+      "completed_at": "2026-03-23T11:17:28.645Z",
+      "id": "MSN-598451",
+      "updated_at": "2026-03-23T11:17:28.645Z"
+    },
+    {
+      "pickup_location": "גף",
+      "destination": "דתק 10",
+      "passengers": 3,
+      "priority": "normal",
+      "status": "pending",
+      "broadcast": false,
+      "assigned_driver_id": "d-001",
+      "created_by": "mgr-001",
+      "created_at": "2026-03-23T11:17:20.324Z",
+      "accepted_at": null,
+      "completed_at": null,
+      "id": "MSN-640324",
+      "updated_at": "2026-03-23T11:17:20.324Z"
+    }
+  ]
+}

@@ -22,8 +22,8 @@ interface Mission {
 
 interface Th {
   dark: boolean;
-  app: string; header: string; panel: string; card: string; tableHdr: string;
-  rowHover: string; text: string; textSub: string; textFaint: string;
+  app: string; header: string; panel: string; card: string;
+  text: string; textSub: string; textFaint: string;
   border: string; borderMd: string; input: string; skeleton: string;
   emptyText: string; toggleBtn: string; divider: string;
 }
@@ -31,8 +31,7 @@ interface Th {
 function getTheme(dark: boolean): Th {
   return dark ? {
     dark, app: "bg-slate-950", header: "bg-slate-900 border-slate-800",
-    panel: "bg-slate-900/50 border-slate-800", card: "bg-slate-900 border-slate-800",
-    tableHdr: "bg-slate-900/80 border-slate-800", rowHover: "hover:bg-slate-800/30",
+    panel: "bg-slate-900/50 border-slate-800", card: "bg-slate-900 border-slate-700",
     text: "text-slate-100", textSub: "text-slate-400", textFaint: "text-slate-600",
     border: "border-slate-800", borderMd: "border-slate-700",
     input: "bg-slate-900 border-slate-700 text-slate-100 placeholder-slate-500 focus:border-cyan-600 focus:ring-cyan-600/40",
@@ -42,7 +41,6 @@ function getTheme(dark: boolean): Th {
   } : {
     dark, app: "bg-slate-50", header: "bg-white border-slate-200",
     panel: "bg-white border-slate-200", card: "bg-white border-slate-200",
-    tableHdr: "bg-slate-100 border-slate-200", rowHover: "hover:bg-slate-50",
     text: "text-slate-900", textSub: "text-slate-500", textFaint: "text-slate-400",
     border: "border-slate-200", borderMd: "border-slate-300",
     input: "bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-cyan-600 focus:ring-cyan-600/30",
@@ -91,11 +89,11 @@ const formatTime = (iso?: string): string => {
 };
 
 const STATUS_STYLES: Record<MissionStatus, { badge: string; dot: string; label: string }> = {
-  pending:   { badge: "bg-slate-700 text-slate-300 border-slate-600",       dot: "bg-slate-400",  label: "ממתין"  },
-  accepted:  { badge: "bg-blue-900/60 text-blue-300 border-blue-700",       dot: "bg-blue-400",   label: "התקבל"  },
-  en_route:  { badge: "bg-amber-900/60 text-amber-300 border-amber-700",    dot: "bg-amber-400",  label: "בדרך"   },
-  completed: { badge: "bg-green-900/60 text-green-300 border-green-700",    dot: "bg-green-400",  label: "הושלם"  },
-  cancelled: { badge: "bg-red-900/60 text-red-400 border-red-800",          dot: "bg-red-500",    label: "בוטל"   },
+  pending:   { badge: "bg-slate-700 text-slate-300 border-slate-600",    dot: "bg-slate-400",  label: "ממתין" },
+  accepted:  { badge: "bg-blue-900/60 text-blue-300 border-blue-700",    dot: "bg-blue-400",   label: "התקבל" },
+  en_route:  { badge: "bg-amber-900/60 text-amber-300 border-amber-700", dot: "bg-amber-400",  label: "בדרך"  },
+  completed: { badge: "bg-green-900/60 text-green-300 border-green-700", dot: "bg-green-400",  label: "הושלם" },
+  cancelled: { badge: "bg-red-900/60 text-red-400 border-red-800",       dot: "bg-red-500",    label: "בוטל"  },
 };
 
 // ---------------------------------------------------------------------------
@@ -145,7 +143,6 @@ function useActiveMissions() {
   const cancelMission = useCallback(async (id: string, ms: Mission[]) => {
     const m = ms.find(m => m.id === id);
     if (!m) return;
-    // Optimistic update
     dispatch({ type: "UPDATE", payload: { ...m, status: "cancelled" } });
     try {
       await fetch(`/api/missions/${encodeURIComponent(id)}/status`, {
@@ -153,12 +150,33 @@ function useActiveMissions() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "cancelled", caller_role: "manager" }),
       });
-    } catch {
-      // Revert on failure — next poll will restore correct state
-    }
+    } catch { /* next poll restores */ }
   }, []);
 
   return { missions, loading, error, lastRefresh, addMission, cancelMission };
+}
+
+// ---------------------------------------------------------------------------
+// Icons
+// ---------------------------------------------------------------------------
+
+function MapPinIcon({ className = "w-5 h-5" }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>;
+}
+function FlagIcon({ className = "w-5 h-5" }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
+}
+function UserIcon({ className = "w-5 h-5" }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+}
+function SunIcon() {
+  return <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>;
+}
+function MoonIcon() {
+  return <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
+}
+function PlusIcon() {
+  return <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,13 +195,6 @@ function StatusBadge({ status }: { status: MissionStatus }) {
 
 function Spinner() {
   return <span className="inline-block w-3.5 h-3.5 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />;
-}
-
-function SunIcon() {
-  return <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>;
-}
-function MoonIcon() {
-  return <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
 }
 
 // ---------------------------------------------------------------------------
@@ -286,130 +297,137 @@ function DispatchForm({ onMissionCreated, t }: {
 }
 
 // ---------------------------------------------------------------------------
-// Active Missions Table
+// Manager Mission Card
 // ---------------------------------------------------------------------------
 
 const ACTIVE_STATUSES: MissionStatus[] = ["pending", "accepted", "en_route"];
-const STATUS_FILTERS = [
-  { label: "הכל פעיל", value: "all"      },
-  { label: "ממתין",    value: "pending"  },
-  { label: "התקבל",   value: "accepted" },
-  { label: "בדרך",    value: "en_route" },
-] as const;
 
-type SortKey = "id" | "pickup_location" | "created_at" | "passengers";
-
-function ActiveMissionsTable({ missions, loading, lastRefresh, onCancel, t }: {
-  missions: Mission[]; loading: boolean; lastRefresh: Date; onCancel: (id: string) => void; t: Th;
+function ManagerMissionCard({ mission, onCancel, t }: {
+  mission: Mission; onCancel: (id: string) => void; t: Th;
 }) {
-  const [statusFilter, setStatusFilter] = useState<MissionStatus | "all">("all");
-  const [sortKey, setSortKey] = useState<SortKey>("created_at");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [, tick] = useState(0);
-  useEffect(() => { const id = setInterval(() => tick(n => n + 1), 10000); return () => clearInterval(id); }, []);
+  useEffect(() => { const id = setInterval(() => tick(n => n + 1), 30000); return () => clearInterval(id); }, []);
 
-  const active   = missions.filter(m => ACTIVE_STATUSES.includes(m.status));
-  const filtered = active.filter(m => statusFilter === "all" || m.status === statusFilter);
-  const sorted   = [...filtered].sort((a, b) => {
-    let cmp = 0;
-    if      (sortKey === "id")              cmp = a.id.localeCompare(b.id);
-    else if (sortKey === "pickup_location") cmp = a.pickup_location.localeCompare(b.pickup_location);
-    else if (sortKey === "passengers")      cmp = a.passengers - b.passengers;
-    else if (sortKey === "created_at")      cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    return sortDir === "asc" ? cmp : -cmp;
-  });
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortKey(key); setSortDir("asc"); }
+  const handleCancel = () => {
+    if (confirmCancel) { onCancel(mission.id); setConfirmCancel(false); }
+    else { setConfirmCancel(true); setTimeout(() => setConfirmCancel(false), 3000); }
   };
-  const handleCancelClick = (id: string) => {
-    if (cancelConfirm === id) { onCancel(id); setCancelConfirm(null); }
-    else { setCancelConfirm(id); setTimeout(() => setCancelConfirm(c => c === id ? null : c), 3000); }
-  };
-
-  const SI = ({ k }: { k: SortKey }) =>
-    sortKey === k ? <span className="mr-1 text-cyan-400">{sortDir === "asc" ? "↑" : "↓"}</span>
-                 : <span className={`mr-1 ${t.textFaint}`}>↕</span>;
-
-  const th = `px-3 py-2.5 text-right text-[10px] font-mono font-bold tracking-wide whitespace-nowrap cursor-pointer select-none ${t.textSub}`;
 
   return (
-    <div dir="rtl">
-      <div className="flex items-center justify-between mb-3">
+    <div className={`rounded-2xl border overflow-hidden shadow-sm ${t.card}`}>
+      <div className="px-5 pt-5 pb-4 flex flex-col gap-4">
+        {/* Pickup */}
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex-shrink-0 text-emerald-500">
+            <MapPinIcon />
+          </div>
+          <div className="min-w-0">
+            <p className={`text-xs font-semibold mb-0.5 ${t.textSub}`}>איסוף</p>
+            <p className={`text-base font-bold leading-snug ${t.text}`}>{mission.pickup_location}</p>
+          </div>
+        </div>
+
+        <div className={`h-px mx-8 ${t.dark ? "bg-slate-800" : "bg-slate-200"}`} />
+
+        {/* Destination */}
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex-shrink-0 text-blue-500">
+            <FlagIcon />
+          </div>
+          <div className="min-w-0">
+            <p className={`text-xs font-semibold mb-0.5 ${t.textSub}`}>יעד</p>
+            <p className={`text-base font-bold leading-snug ${t.text}`}>{mission.destination}</p>
+          </div>
+        </div>
+
+        {/* Passengers + meta */}
+        <div className={`flex items-center gap-3 rounded-xl px-4 py-3 ${t.dark ? "bg-slate-800/60" : "bg-slate-100"}`}>
+          <div className={t.textSub}><UserIcon /></div>
+          <p className={`text-xs font-semibold ${t.textSub}`}>נוסעים</p>
+          <p className={`text-2xl font-black mr-auto ${t.text}`}>{mission.passengers}</p>
+          <div className="flex flex-col items-end gap-1">
+            <StatusBadge status={mission.status} />
+            <span className={`text-[10px] font-mono ${t.textFaint}`}>{formatElapsed(mission.created_at)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Cancel button */}
+      <div className="px-4 pb-4">
+        <button
+          onClick={handleCancel}
+          className={`w-full min-h-[52px] rounded-xl font-bold text-base transition-all duration-150 border active:scale-[0.98]
+            ${confirmCancel
+              ? "bg-red-700 border-red-500 text-white"
+              : t.dark
+                ? "bg-transparent border-slate-700 text-slate-400 hover:border-red-700 hover:text-red-400"
+                : "bg-transparent border-slate-300 text-slate-500 hover:border-red-400 hover:text-red-500"
+            }`}
+        >
+          {confirmCancel ? "לאשר ביטול?" : "ביטול שינוע"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Active Mission Cards
+// ---------------------------------------------------------------------------
+
+function ActiveMissionCards({ missions, loading, lastRefresh, onCancel, onAddMission, t }: {
+  missions: Mission[]; loading: boolean; lastRefresh: Date;
+  onCancel: (id: string) => void; onAddMission: () => void; t: Th;
+}) {
+  const active = missions
+    .filter(m => ACTIVE_STATUSES.includes(m.status))
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  return (
+    <div dir="rtl" className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono font-bold text-cyan-500 tracking-wide">שינועים פעילים</span>
+          <span className={`text-[10px] font-mono font-bold text-cyan-500 tracking-wide`}>שינועים פעילים</span>
           <span className="bg-cyan-900/50 text-cyan-400 border border-cyan-800 text-[10px] font-mono rounded px-1.5 py-0.5">{active.length}</span>
+          <div className={`flex items-center gap-1.5 text-[10px] font-mono ${t.textFaint}`}>
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
+            חי
+          </div>
         </div>
-        <div className={`flex items-center gap-2 text-[10px] font-mono ${t.textFaint}`}>
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
-          חי — עודכן לפני {formatElapsed(lastRefresh.toISOString())}
-        </div>
+        {/* Add button — always visible, especially useful on mobile */}
+        <button
+          onClick={onAddMission}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-700 hover:bg-cyan-600 active:scale-[0.97] text-white text-sm font-bold transition-all shadow-md shadow-cyan-900/30"
+        >
+          <PlusIcon />
+          הוסף שינוע
+        </button>
       </div>
 
-      <div className="flex gap-1 mb-3">
-        {STATUS_FILTERS.map(opt => (
-          <button key={opt.value} onClick={() => setStatusFilter(opt.value as MissionStatus | "all")}
-            className={`px-2.5 py-1 rounded text-[10px] font-mono tracking-wide border transition-all
-              ${statusFilter === opt.value ? (t.dark ? "bg-slate-700 border-slate-500 text-slate-100" : "bg-slate-200 border-slate-400 text-slate-800") : `${t.border} ${t.textFaint}`}`}>
-            {opt.label}
-            {opt.value !== "all" && <span className={`mr-1.5 ${t.textFaint}`}>{active.filter(m => m.status === opt.value).length}</span>}
+      {/* Cards / States */}
+      {loading ? (
+        Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className={`rounded-2xl border h-48 animate-pulse ${t.card}`} />
+        ))
+      ) : active.length === 0 ? (
+        <div className={`rounded-2xl border flex flex-col items-center justify-center py-16 gap-4 ${t.card}`}>
+          <span className={`text-4xl ${t.emptyText}`}>◼</span>
+          <p className={`font-mono text-sm tracking-wide ${t.emptyText}`}>אין שינועים פעילים</p>
+          <button
+            onClick={onAddMission}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-700 hover:bg-cyan-600 active:scale-[0.97] text-white text-sm font-bold transition-all"
+          >
+            <PlusIcon />
+            פרוס שינוע ראשון
           </button>
-        ))}
-      </div>
-
-      <div className={`overflow-x-auto rounded border ${t.border}`}>
-        <table className="w-full text-sm border-collapse">
-          <thead className={`border-b ${t.tableHdr}`}>
-            <tr>
-              <th className={th} onClick={() => handleSort("pickup_location")}>מסלול <SI k="pickup_location" /></th>
-              <th className={th} onClick={() => handleSort("passengers")}>נוסעים <SI k="passengers" /></th>
-              <th className={th} onClick={() => handleSort("created_at")}>שחלף <SI k="created_at" /></th>
-              <th className={`${th} text-left`}>פעולות</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? Array.from({ length: 3 }).map((_, i) => (
-              <tr key={i} className={`border-b ${t.border}`}>
-                {Array.from({ length: 4 }).map((_, j) => (
-                  <td key={j} className="px-3 py-3"><div className={`h-3 rounded animate-pulse ${t.skeleton}`} /></td>
-                ))}
-              </tr>
-            )) : sorted.length === 0 ? (
-              <tr><td colSpan={4} className="px-6 py-12 text-center">
-                <div className={`flex flex-col items-center gap-3 ${t.emptyText}`}>
-                  <span className="text-4xl">◼</span>
-                  <span className="font-mono text-sm tracking-wide">אין שינועים פעילים</span>
-                  <span className="text-xs">פרוס שינוע באמצעות הטופס</span>
-                </div>
-              </td></tr>
-            ) : sorted.map(m => (
-              <tr key={m.id} className={`border-b ${t.border} ${t.rowHover} transition-colors group`}>
-                <td className="px-3 py-2.5 max-w-[220px]">
-                  <div className="flex flex-col gap-0.5">
-                    <span className={`text-[10px] truncate ${t.textSub}`}><span className="text-green-500 ml-1">▲</span>{m.pickup_location}</span>
-                    <span className={`text-[10px] truncate ${t.textSub}`}><span className="text-red-500 ml-1">▼</span>{m.destination}</span>
-                  </div>
-                </td>
-                <td className="px-3 py-2.5 text-center">
-                  <span className={`font-mono font-bold text-sm ${t.text}`}>{m.passengers}</span>
-                </td>
-                <td className="px-3 py-2.5"><span className={`font-mono text-[11px] ${t.textFaint}`}>{formatElapsed(m.created_at)}</span></td>
-                <td className="px-3 py-2.5 text-left">
-                  <div className="flex items-center justify-start gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => handleCancelClick(m.id)}
-                      className={`px-2 py-1 rounded text-[10px] font-mono tracking-wide border transition-all
-                        ${cancelConfirm === m.id ? "bg-red-800 border-red-600 text-red-100" : `${t.border} ${t.textFaint} hover:border-red-700 hover:text-red-400`}`}>
-                      {cancelConfirm === m.id ? "לאשר?" : "ביטול"}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        </div>
+      ) : (
+        active.map(m => (
+          <ManagerMissionCard key={m.id} mission={m} onCancel={onCancel} t={t} />
+        ))
+      )}
     </div>
   );
 }
@@ -441,7 +459,7 @@ function RecentTripsTable({ missions, loading, t }: { missions: Mission[]; loadi
       </div>
       <div className={`overflow-x-auto rounded border ${t.border}`}>
         <table className="w-full text-sm border-collapse">
-          <thead className={`border-b ${t.tableHdr}`}>
+          <thead className={`border-b ${t.dark ? "bg-slate-900/80 border-slate-800" : "bg-slate-100 border-slate-200"}`}>
             <tr>
               <th className={th}>מסלול</th>
               <th className={th}>נוסעים</th>
@@ -460,11 +478,9 @@ function RecentTripsTable({ missions, loading, t }: { missions: Mission[]; loadi
             )) : recent.length === 0 ? (
               <tr><td colSpan={5} className={`px-6 py-8 text-center text-xs font-mono tracking-wide ${t.emptyText}`}>אין נסיעות שהושלמו עדיין</td></tr>
             ) : recent.map(m => (
-              <tr key={m.id} className={`border-b ${t.border} ${t.rowHover} transition-colors`}>
+              <tr key={m.id} className={`border-b ${t.border} ${t.dark ? "hover:bg-slate-800/30" : "hover:bg-slate-50"} transition-colors`}>
                 <td className="px-3 py-2.5 max-w-[220px]">
-                  <div className="flex flex-col gap-0.5">
-                    <span className={`text-[10px] truncate ${t.textSub}`}>{m.pickup_location} ← {m.destination}</span>
-                  </div>
+                  <span className={`text-[10px] truncate block ${t.textSub}`}>{m.pickup_location} ← {m.destination}</span>
                 </td>
                 <td className="px-3 py-2.5 text-center">
                   <span className={`font-mono font-bold text-sm ${t.text}`}>{m.passengers}</span>
@@ -492,7 +508,6 @@ function Header({ activeMissionCount, t, onToggle }: { activeMissionCount: numbe
 
   return (
     <header className={`flex items-center justify-between px-4 md:px-6 py-3 border-b flex-shrink-0 gap-2 ${t.header}`} dir="rtl">
-      {/* Title */}
       <div className="flex items-center gap-2 min-w-0">
         <div className="grid grid-cols-3 gap-0.5 w-4 h-4 opacity-60 flex-shrink-0">
           {Array.from({ length: 9 }).map((_, i) => <div key={i} className="bg-cyan-400 rounded-sm" />)}
@@ -500,12 +515,10 @@ function Header({ activeMissionCount, t, onToggle }: { activeMissionCount: numbe
         <h1 className={`font-mono font-bold tracking-wide text-sm md:text-base truncate ${t.text}`}>מפקדת שינועים</h1>
         <span className={`font-mono text-[10px] tracking-wide hidden md:inline ${t.textFaint}`}>שליטה מבצעית</span>
       </div>
-      {/* Center: active count */}
       <div className={`flex items-center gap-2 px-2.5 md:px-3 py-1.5 rounded border flex-shrink-0 ${t.dark ? "bg-slate-800 border-slate-700" : "bg-slate-100 border-slate-200"}`}>
         <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
         <span className={`font-mono text-[11px] tracking-wide ${t.text}`}>{activeMissionCount} פעיל</span>
       </div>
-      {/* Right: clock + toggle */}
       <div className="flex items-center gap-2 flex-shrink-0">
         <div className="hidden sm:flex flex-col items-start">
           <span className="font-mono text-sm md:text-lg font-bold text-cyan-400 tracking-wider leading-none">{timeStr}</span>
@@ -538,12 +551,21 @@ export default function ManagerDashboard() {
     </div>
   );
 
+  const missionCards = (
+    <ActiveMissionCards
+      missions={missions}
+      loading={loading}
+      lastRefresh={lastRefresh}
+      onCancel={handleCancel}
+      onAddMission={() => setMobileTab("dispatch")}
+      t={t}
+    />
+  );
+
   const dispatchForm = (
     <DispatchForm onMissionCreated={(m) => { addMission(m); setMobileTab("missions"); }} t={t} />
   );
-  const activeMissionsTable = (
-    <ActiveMissionsTable missions={missions} loading={loading} lastRefresh={lastRefresh} onCancel={handleCancel} t={t} />
-  );
+
   const recentTripsTable = (
     <RecentTripsTable missions={missions} loading={loading} t={t} />
   );
@@ -562,28 +584,24 @@ export default function ManagerDashboard() {
         </div>
         <div className={`flex-1 overflow-y-auto ${mobileTab === "missions" ? "block" : "hidden"}`}>
           <div className="px-4 py-5 flex flex-col gap-6">
-            {activeMissionsTable}
+            {missionCards}
             <div className={`h-px ${t.dark ? "bg-slate-800" : "bg-slate-200"}`} />
             {recentTripsTable}
           </div>
         </div>
         {/* Mobile tab bar */}
-        <div className={`flex-shrink-0 flex border-t ${t.border} ${t.panel}`}>
+        <div className={`flex-shrink-0 flex border-t ${t.border} ${t.dark ? "bg-slate-900/50" : "bg-white"}`}>
           <button
             onClick={() => setMobileTab("missions")}
             className={`flex-1 py-3 text-xs font-mono font-bold tracking-wide transition-all
-              ${mobileTab === "missions"
-                ? "text-cyan-400 border-t-2 border-cyan-500 -mt-px"
-                : `${t.textFaint}`}`}
+              ${mobileTab === "missions" ? "text-cyan-400 border-t-2 border-cyan-500 -mt-px" : t.textFaint}`}
           >
             שינועים
           </button>
           <button
             onClick={() => setMobileTab("dispatch")}
             className={`flex-1 py-3 text-xs font-mono font-bold tracking-wide transition-all
-              ${mobileTab === "dispatch"
-                ? "text-cyan-400 border-t-2 border-cyan-500 -mt-px"
-                : `${t.textFaint}`}`}
+              ${mobileTab === "dispatch" ? "text-cyan-400 border-t-2 border-cyan-500 -mt-px" : t.textFaint}`}
           >
             פרוס שינוע
           </button>
@@ -597,7 +615,7 @@ export default function ManagerDashboard() {
         </aside>
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto px-5 py-5 min-h-0">
-            {activeMissionsTable}
+            {missionCards}
           </div>
           <div className={`h-px flex-shrink-0 ${t.dark ? "bg-slate-800" : "bg-slate-200"}`} />
           <div className={`h-[260px] flex-shrink-0 overflow-y-auto px-5 py-4 ${t.dark ? "bg-slate-950/60" : "bg-slate-50"}`}>

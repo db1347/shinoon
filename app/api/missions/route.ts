@@ -51,8 +51,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<M
     });
     // Instant SSE push to all connected driver tabs
     notifyClients();
-    // Fire-and-forget OneSignal push for system tray notification
-    pushMissionNotification(pickup_location.trim());
+    // Await the OneSignal push — must complete before response returns in serverless
+    await pushMissionNotification(pickup_location.trim());
     return NextResponse.json({ data: mission, error: null }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/missions]", err);

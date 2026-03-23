@@ -17,20 +17,14 @@ interface Mission {
 }
 
 // ---------------------------------------------------------------------------
-// Beep sound — short 440Hz sine wave encoded as base64 WAV
+// Audio — MP3 alert (unlocked via user gesture on shift start)
 // ---------------------------------------------------------------------------
-
-const BEEP_WAV =
-  'data:audio/wav;base64,' +
-  'UklGRlQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YTAAAAC2' +
-  'ALQC/wP/BP8F/wb/B/8I/wn/Cv8L/wz/Df8O/w//EP8R/xL/E/8U/xX/Fv' +
-  '8X/xj/Gf8a/xv/HP8d/x7/H/8g/yH/Iv8j/yT/Jf8m/yf/KA=='
 
 function playBeep() {
   try {
-    const audio = new Audio(BEEP_WAV)
-    audio.volume = 0.6
-    audio.play().catch(() => {/* blocked by browser — shift gate prevents this */})
+    const audio = new Audio('/alert.mp3')
+    audio.volume = 0.8
+    audio.play().catch(() => {})
   } catch { /* ignore */ }
 }
 
@@ -238,8 +232,8 @@ export default function DriverMobileView() {
   }, [isShiftStarted, doFetch])
 
   const handleStartShift = useCallback(async () => {
-    // Unlock audio context via user gesture
-    try { new Audio(BEEP_WAV).play().then(a => a).catch(() => {}) } catch { /* ignore */ }
+    // Play immediately on the user gesture to unlock audio autoplay policy
+    playBeep()
 
     // Request notification permission
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {

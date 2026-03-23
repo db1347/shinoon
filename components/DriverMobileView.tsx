@@ -5,6 +5,8 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const window: Window & { OneSignal?: any; OneSignalDeferred?: Array<(os: any) => void> }
 
+type PushStatus = 'unknown' | 'granted' | 'denied' | 'requesting'
+
 type MissionStatus = 'pending' | 'accepted' | 'en_route' | 'completed' | 'cancelled'
 type Priority = 'low' | 'normal' | 'high' | 'urgent'
 
@@ -174,6 +176,8 @@ export default function DriverMobileView() {
   const [completingId, setCompletingId] = useState<string | null>(null)
   const [error, setError]             = useState<string | null>(null)
   const [osReady, setOsReady]         = useState(false)
+  const [pushStatus, setPushStatus]   = useState<PushStatus>('unknown')
+  const [testLoading, setTestLoading] = useState(false)
   const prevCountRef                  = useRef<number>(0)
   const t = getTheme(dark)
 
@@ -238,18 +242,38 @@ export default function DriverMobileView() {
   // ── OneSignal — hook into CDN global once it's ready ────────────────────
 
   useEffect(() => {
-    const setup = (os: NonNullable<typeof window.OneSignal>) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const setup = (os: any) => {
+      console.log('[OneSignal] SDK ready, setting up listeners')
       setOsReady(true)
+
+      // Log current permission state
+      const perm = os.Notifications.permission
+      console.log('[OneSignal] Notification permission:', perm)
+      setPushStatus(perm ? 'granted' : 'unknown')
+
+      // Log subscription ID so we can verify in OneSignal dashboard
+      const subId = os.User?.PushSubscription?.id
+      console.log('[OneSignal] Subscription ID:', subId ?? 'not yet subscribed')
+
+      // When a push arrives while app is open — suppress banner, reload missions
       os.Notifications.addEventListener('foregroundWillDisplay', (event: { preventDefault: () => void }) => {
+        console.log('[OneSignal] Foreground push received — reloading missions')
         event.preventDefault()
+        playBeep()
         loadMissions()
+      })
+
+      // Track permission changes
+      os.Notifications.addEventListener('permissionChange', (granted: boolean) => {
+        console.log('[OneSignal] Permission changed:', granted)
+        setPushStatus(granted ? 'granted' : 'denied')
       })
     }
 
-    if (window.OneSignal) {
+    if (window.OneSignal?.initialized) {
       setup(window.OneSignal)
     } else {
-      // CDN script loads async — wait for it
       window.OneSignalDeferred = window.OneSignalDeferred || []
       window.OneSignalDeferred.push((os) => setup(os))
     }
@@ -257,11 +281,48 @@ export default function DriverMobileView() {
 
   // ── Start shift ──────────────────────────────────────────────────────────
 
-  const handleStartShift = useCallback(() => {
+  const handleStartShift = useCallback(async () => {
     playBeep() // unlock audio on user gesture
+
+    // Request push permission explicitly within the user-gesture context
+    if (window.OneSignal?.Notifications) {
+      const already = window.OneSignal.Notifications.permission
+      console.log('[OneSignal] Permission before request:', already)
+      if (!already) {
+        setPushStatus('requesting')
+        try {
+          await window.OneSignal.Notifications.requestPermission()
+          const after = window.OneSignal.Notifications.permission
+          console.log('[OneSignal] Permission after request:', after)
+          setPushStatus(after ? 'granted' : 'denied')
+        } catch (e) {
+          console.error('[OneSignal] requestPermission error:', e)
+          setPushStatus('denied')
+        }
+      }
+    } else {
+      console.warn('[OneSignal] SDK not ready when shift started — slide prompt will handle it')
+    }
+
     setIsShiftStarted(true)
     loadMissions()
   }, [loadMissions])
+
+  // ── Test notification ─────────────────────────────────────────────────────
+
+  const handleTestNotification = useCallback(async () => {
+    setTestLoading(true)
+    console.log('[TEST] Sending test push notification...')
+    try {
+      const res = await fetch('/api/test-notification', { method: 'POST' })
+      const json = await res.json()
+      console.log('[TEST] Response:', json)
+    } catch (e) {
+      console.error('[TEST] Failed:', e)
+    } finally {
+      setTestLoading(false)
+    }
+  }, [])
 
   // ── Complete mission ─────────────────────────────────────────────────────
 
@@ -329,6 +390,32 @@ export default function DriverMobileView() {
           </button>
         </div>
       </div>
+
+      {/* Push status + test button */}
+      {isShiftStarted && (
+        <div className={`mx-4 mt-3 flex items-center justify-between gap-3 rounded-xl px-4 py-2.5 border ${t.dark ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-slate-200'}`}>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-bold ${
+              pushStatus === 'granted'    ? 'text-emerald-400' :
+              pushStatus === 'denied'     ? 'text-red-400' :
+              pushStatus === 'requesting' ? 'text-yellow-400' :
+              t.textFaint
+            }`}>
+              {pushStatus === 'granted'    ? '🔔 התראות פעילות' :
+               pushStatus === 'denied'     ? '🔕 התראות חסומות' :
+               pushStatus === 'requesting' ? '⏳ מבקש הרשאה...' :
+               '🔔 התראות לא הוגדרו'}
+            </span>
+          </div>
+          <button
+            onClick={handleTestNotification}
+            disabled={testLoading}
+            className="text-xs font-bold px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-all"
+          >
+            {testLoading ? '...' : 'TEST'}
+          </button>
+        </div>
+      )}
 
       {/* Error toast */}
       {error && (

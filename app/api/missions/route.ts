@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMissions, createMission } from "@/lib/localDb";
 import { pushMissionNotification } from "@/lib/onesignal";
+import { notifyClients } from "@/app/api/missions/stream/route";
 import type { CreateMissionBody, Mission, MissionStatus, ApiResponse } from "@/lib/types";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -48,7 +49,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<M
       accepted_at:        null,
       completed_at:       null,
     });
-    // Fire-and-forget push — don't block the response
+    // Instant SSE push to all connected driver tabs
+    notifyClients();
+    // Fire-and-forget OneSignal push for system tray notification
     pushMissionNotification(pickup_location.trim());
     return NextResponse.json({ data: mission, error: null }, { status: 201 });
   } catch (err) {

@@ -165,7 +165,7 @@ function WaitingState({ t }: { t: Th }) {
 // Root
 // ---------------------------------------------------------------------------
 
-const POLL_INTERVAL = 8000
+const POLL_INTERVAL = 30_000 // fallback poll every 30s in case SSE drops
 
 export default function DriverMobileView() {
   const [dark, setDark]               = useState(true)
@@ -198,7 +198,27 @@ export default function DriverMobileView() {
     }
   }, [])
 
-  // ── Polling while shift is active ────────────────────────────────────────
+  // ── SSE stream for instant updates ───────────────────────────────────────
+
+  useEffect(() => {
+    if (!isShiftStarted) return
+    let es: EventSource
+    let retryTimeout: ReturnType<typeof setTimeout>
+
+    const connect = () => {
+      es = new EventSource('/api/missions/stream')
+      es.onmessage = (e) => { if (e.data === 'refresh') loadMissions() }
+      es.onerror   = () => {
+        es.close()
+        retryTimeout = setTimeout(connect, 5_000) // reconnect after 5s
+      }
+    }
+
+    connect()
+    return () => { es?.close(); clearTimeout(retryTimeout) }
+  }, [isShiftStarted, loadMissions])
+
+  // ── Fallback poll (30s) in case SSE is unavailable ───────────────────────
 
   useEffect(() => {
     if (!isShiftStarted) return

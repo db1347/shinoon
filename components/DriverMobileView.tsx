@@ -221,7 +221,6 @@ export default function DriverMobileView() {
 
     OneSignal.init({
       appId,
-      serviceWorkerPath: '/OneSignalSDKWorker.js',
       allowLocalhostAsSecureOrigin: true,
     }).then(() => {
       setOsReady(true)
@@ -231,12 +230,6 @@ export default function DriverMobileView() {
       })
     }).catch(err => console.error('[OneSignal] init error:', err))
   }, [loadMissions])
-
-  // ── Request push permission once both shift is started and OneSignal is ready
-  useEffect(() => {
-    if (!osReady || !isShiftStarted) return
-    OneSignal.Notifications.requestPermission().catch(() => {})
-  }, [osReady, isShiftStarted])
 
   // ── Start shift ──────────────────────────────────────────────────────────
 

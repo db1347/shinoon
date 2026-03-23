@@ -163,6 +163,8 @@ function WaitingState({ t }: { t: Th }) {
 // Root
 // ---------------------------------------------------------------------------
 
+const POLL_INTERVAL = 8000
+
 export default function DriverMobileView() {
   const [dark, setDark]               = useState(true)
   const [isShiftStarted, setIsShiftStarted] = useState(false)
@@ -170,6 +172,7 @@ export default function DriverMobileView() {
   const [completingId, setCompletingId] = useState<string | null>(null)
   const [error, setError]             = useState<string | null>(null)
   const [osReady, setOsReady]         = useState(false)
+  const prevCountRef                  = useRef<number>(0)
   const t = getTheme(dark)
 
   // ── Fetch active missions ────────────────────────────────────────────────
@@ -181,6 +184,11 @@ export default function DriverMobileView() {
       const active: Mission[] = (json.data ?? [])
         .filter((m: Mission) => m.status !== 'completed' && m.status !== 'cancelled')
         .sort((a: Mission, b: Mission) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+
+      // Play beep if new missions arrived since last check
+      if (active.length > prevCountRef.current) playBeep()
+      prevCountRef.current = active.length
+
       setMissions(active)
     } catch {
       setError('שגיאה בטעינת שינועים')
@@ -188,11 +196,28 @@ export default function DriverMobileView() {
     }
   }, [])
 
-  // ── OneSignal init (runs once on mount) ─────────────────────────────────
+  // ── Polling while shift is active ────────────────────────────────────────
+
+  useEffect(() => {
+    if (!isShiftStarted) return
+    const id = setInterval(loadMissions, POLL_INTERVAL)
+    return () => clearInterval(id)
+  }, [isShiftStarted, loadMissions])
+
+  // ── Reload when tab becomes visible ─────────────────────────────────────
+
+  useEffect(() => {
+    if (!isShiftStarted) return
+    const onVisible = () => { if (document.visibilityState === 'visible') loadMissions() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [isShiftStarted, loadMissions])
+
+  // ── OneSignal init (runs once on mount) — bonus instant push ─────────────
 
   useEffect(() => {
     const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID
-    if (!appId) { console.warn('[OneSignal] NEXT_PUBLIC_ONESIGNAL_APP_ID not set'); return }
+    if (!appId) return
 
     OneSignal.init({
       appId,
@@ -200,18 +225,10 @@ export default function DriverMobileView() {
       allowLocalhostAsSecureOrigin: true,
     }).then(() => {
       setOsReady(true)
-
-      // When a push notification arrives while the app is open → reload missions + play sound
       OneSignal.Notifications.addEventListener('foregroundWillDisplay', (event) => {
-        event.preventDefault() // don't show the default in-app banner
-        playBeep()
+        event.preventDefault()
         loadMissions()
       })
-
-      // Also reload when the app becomes visible again (user taps notification to open)
-      const onVisible = () => { if (document.visibilityState === 'visible') loadMissions() }
-      document.addEventListener('visibilitychange', onVisible)
-      return () => document.removeEventListener('visibilitychange', onVisible)
     }).catch(err => console.error('[OneSignal] init error:', err))
   }, [loadMissions])
 
@@ -222,7 +239,6 @@ export default function DriverMobileView() {
 
     if (osReady) {
       try {
-        // Prompt the OS push permission dialog
         await OneSignal.Notifications.requestPermission()
       } catch (err) {
         console.error('[OneSignal] requestPermission error:', err)

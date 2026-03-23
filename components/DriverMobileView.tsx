@@ -28,17 +28,33 @@ function playBeep() {
   } catch { /* ignore */ }
 }
 
-async function fireNotification(pickup: string) {
+async function fireNotification(title: string, body: string) {
   if (typeof Notification === 'undefined') return
   if (Notification.permission !== 'granted') return
-  const opts: NotificationOptions = { body: 'איסוף: ' + pickup }
+
+  // Android requires icon + vibrate to surface in system tray
+  const opts = {
+    body,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    vibrate: [200, 100, 200],
+    tag: 'mission-alert',
+    renotify: true,
+  } as NotificationOptions
+
   try {
-    // Service Worker path — required for real system tray notifications on mobile
-    const reg = await navigator.serviceWorker?.ready
-    if (reg) { reg.showNotification('שינוע חדש התקבל!', opts); return }
-  } catch { /* fall through */ }
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready
+      await reg.showNotification(title, opts)
+      return
+    }
+  } catch (err) {
+    console.error('[notification] SW showNotification failed:', err)
+  }
   // Desktop fallback
-  new Notification('שינוע חדש התקבל!', opts)
+  try { new Notification(title, opts) } catch (err) {
+    console.error('[notification] direct Notification failed:', err)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +242,7 @@ export default function DriverMobileView() {
       const newMissions = active.filter(m => !prevIdsRef.current.has(m.id))
       if (newMissions.length > 0) {
         playBeep()
-        for (const m of newMissions) await fireNotification(m.pickup_location)
+        for (const m of newMissions) await fireNotification('שינוע חדש התקבל!', 'איסוף: ' + m.pickup_location)
       }
 
       prevIdsRef.current = new Set(active.map(m => m.id))
@@ -300,6 +316,16 @@ export default function DriverMobileView() {
             <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${t.dark ? 'bg-neutral-800 text-neutral-300' : 'bg-slate-200 text-slate-600'}`}>
               {missions.length} שינועים
             </span>
+          )}
+          {isShiftStarted && (
+            <button
+              onClick={() => { playBeep(); fireNotification('בדיקת התראה', 'ההתראות עובדות!') }}
+              title="בדיקת התראה"
+              className={`px-2.5 py-1.5 rounded-full border text-xs font-mono transition-all
+                ${t.dark ? 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:bg-neutral-800' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-100'}`}
+            >
+              🔔
+            </button>
           )}
           <button
             onClick={() => setDark(d => !d)}

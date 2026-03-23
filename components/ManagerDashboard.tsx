@@ -273,31 +273,29 @@ function MoonIcon() {
 // Dispatch Form
 // ---------------------------------------------------------------------------
 
-const EMPTY_FORM = { pickup_location: "", destination: "", passengers: 1, priority: "normal" as Priority, assigned_driver_id: "", broadcast: false };
+const EMPTY_FORM = { pickup_location: "", destination: "", passengers: 1 };
 
-function DispatchForm({ drivers, driversLoading, onMissionCreated, t }: {
-  drivers: Driver[]; driversLoading: boolean; onMissionCreated: (m: Mission) => void; t: Th;
+function DispatchForm({ onMissionCreated, t }: {
+  onMissionCreated: (m: Mission) => void; t: Th;
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successFlash, setSuccessFlash] = useState(false);
   const pickupRef = useRef<HTMLInputElement>(null);
-  const available = drivers.filter(d => d.status === "available");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.pickup_location.trim() || !form.destination.trim()) return;
-    if (!form.broadcast && !form.assigned_driver_id) { setSubmitError("בחר נהג או הפעל שידור."); return; }
     setSubmitting(true); setSubmitError(null);
 
     const payload = {
       pickup_location: form.pickup_location.trim(),
       destination: form.destination.trim(),
       passengers: form.passengers,
-      priority: form.priority,
-      assigned_driver_id: form.broadcast ? undefined : form.assigned_driver_id || undefined,
-      broadcast: form.broadcast,
+      priority: "normal" as Priority,
+      assigned_driver_id: undefined,
+      broadcast: true,
       status: "pending" as const,
       created_by: "mgr-001",
       created_at: new Date().toISOString(),
@@ -308,9 +306,8 @@ function DispatchForm({ drivers, driversLoading, onMissionCreated, t }: {
       let created: Mission;
       try { created = await postMission(payload); }
       catch {
-        created = { ...payload, id: `MSN-${7800 + Math.floor(Math.random() * 100)}`, broadcast: form.broadcast,
-          accepted_at: undefined, completed_at: undefined,
-          driver: available.find(d => d.id === form.assigned_driver_id) };
+        created = { ...payload, id: `MSN-${7800 + Math.floor(Math.random() * 100)}`, broadcast: true,
+          accepted_at: undefined, completed_at: undefined };
       }
       onMissionCreated(created as Mission);
       setForm(EMPTY_FORM);
@@ -361,44 +358,6 @@ function DispatchForm({ drivers, driversLoading, onMissionCreated, t }: {
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className={`text-[10px] font-mono tracking-wide ${t.textSub}`}>עדיפות</label>
-        <div className="grid grid-cols-4 gap-1.5">
-          {(["low","normal","high","urgent"] as Priority[]).map(p => {
-            const s = PRIORITY_STYLES[p];
-            return (
-              <button key={p} type="button" onClick={() => setForm(f => ({ ...f, priority: p }))}
-                className={`py-1.5 rounded border text-[10px] font-mono font-bold tracking-wide transition-all ${form.priority === p ? s.buttonActive : s.button}`}>
-                {s.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className={`text-[10px] font-mono tracking-wide ${t.textSub}`}>שיוך נהג</label>
-        <button type="button" onClick={() => setForm(f => ({ ...f, broadcast: !f.broadcast, assigned_driver_id: "" }))}
-          className={`flex items-center justify-between px-3 py-2 rounded border text-sm transition-all
-            ${form.broadcast ? "bg-cyan-900/40 border-cyan-600 text-cyan-300" : `${t.dark ? "bg-slate-900 border-slate-700 text-slate-500" : "bg-white border-slate-300 text-slate-500"}`}`}>
-          <span className="font-mono text-[11px] font-bold tracking-wide">שידור לכל הנהגים הפנויים</span>
-          <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-all ${form.broadcast ? "bg-cyan-400 border-cyan-400" : t.dark ? "border-slate-600" : "border-slate-400"}`} />
-        </button>
-        {!form.broadcast && (
-          <div className="relative">
-            <select value={form.assigned_driver_id}
-              onChange={e => setForm(f => ({ ...f, assigned_driver_id: e.target.value, broadcast: false }))}
-              className={`${fc} appearance-none pl-8 cursor-pointer`} dir="rtl">
-              <option value="">— בחר נהג —</option>
-              {driversLoading ? <option disabled>טוען נהגים...</option>
-              : available.length === 0 ? <option disabled>אין נהגים זמינים</option>
-              : available.map(d => <option key={d.id} value={d.id}>{d.full_name}</option>)}
-            </select>
-            <span className={`absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-xs ${t.textFaint}`}>▾</span>
-          </div>
-        )}
-      </div>
-
       {submitError && <p className="text-red-400 text-xs font-mono bg-red-900/20 border border-red-800 rounded px-3 py-2">{submitError}</p>}
 
       <button type="submit" disabled={submitting}
@@ -426,7 +385,7 @@ const STATUS_FILTERS = [
   { label: "בדרך",    value: "en_route" },
 ] as const;
 
-type SortKey = "id" | "pickup_location" | "priority" | "status" | "created_at" | "passengers";
+type SortKey = "id" | "pickup_location" | "status" | "created_at" | "passengers";
 const PRIORITY_ORDER: Record<Priority, number>      = { urgent: 0, high: 1, normal: 2, low: 3 };
 const STATUS_ORDER:   Record<MissionStatus, number> = { en_route: 0, accepted: 1, pending: 2, completed: 3, cancelled: 4 };
 
@@ -447,7 +406,6 @@ function ActiveMissionsTable({ missions, loading, lastRefresh, onCancel, t }: {
     if      (sortKey === "id")              cmp = a.id.localeCompare(b.id);
     else if (sortKey === "pickup_location") cmp = a.pickup_location.localeCompare(b.pickup_location);
     else if (sortKey === "passengers")      cmp = a.passengers - b.passengers;
-    else if (sortKey === "priority")        cmp = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
     else if (sortKey === "status")          cmp = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
     else if (sortKey === "created_at")      cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     return sortDir === "asc" ? cmp : -cmp;
@@ -498,8 +456,6 @@ function ActiveMissionsTable({ missions, loading, lastRefresh, onCancel, t }: {
             <tr>
               <th className={th} onClick={() => handleSort("pickup_location")}>מסלול <SI k="pickup_location" /></th>
               <th className={th} onClick={() => handleSort("passengers")}>נוסעים <SI k="passengers" /></th>
-              <th className={th}>נהג</th>
-              <th className={th} onClick={() => handleSort("priority")}>עדיפות <SI k="priority" /></th>
               <th className={th} onClick={() => handleSort("status")}>סטטוס <SI k="status" /></th>
               <th className={th} onClick={() => handleSort("created_at")}>שחלף <SI k="created_at" /></th>
               <th className={`${th} text-left`}>פעולות</th>
@@ -508,12 +464,12 @@ function ActiveMissionsTable({ missions, loading, lastRefresh, onCancel, t }: {
           <tbody>
             {loading ? Array.from({ length: 3 }).map((_, i) => (
               <tr key={i} className={`border-b ${t.border}`}>
-                {Array.from({ length: 8 }).map((_, j) => (
+                {Array.from({ length: 5 }).map((_, j) => (
                   <td key={j} className="px-3 py-3"><div className={`h-3 rounded animate-pulse ${t.skeleton}`} /></td>
                 ))}
               </tr>
             )) : sorted.length === 0 ? (
-              <tr><td colSpan={7} className="px-6 py-12 text-center">
+              <tr><td colSpan={5} className="px-6 py-12 text-center">
                 <div className={`flex flex-col items-center gap-3 ${t.emptyText}`}>
                   <span className="text-4xl">◼</span>
                   <span className="font-mono text-sm tracking-wide">אין שינועים פעילים</span>
@@ -531,14 +487,6 @@ function ActiveMissionsTable({ missions, loading, lastRefresh, onCancel, t }: {
                 <td className="px-3 py-2.5 text-center">
                   <span className={`font-mono font-bold text-sm ${t.text}`}>{m.passengers}</span>
                 </td>
-                <td className="px-3 py-2.5">
-                  {m.broadcast && !m.driver
-                    ? <span className="text-[10px] font-mono text-cyan-500 border border-cyan-800 bg-cyan-900/20 rounded px-1.5 py-0.5">שידור</span>
-                    : m.driver
-                    ? <div className="flex items-center gap-2"><DriverAvatar name={m.driver.full_name} t={t} /><span className={`text-[11px] leading-tight hidden xl:block ${t.text}`}>{m.driver.full_name}</span></div>
-                    : <span className={`text-[10px] font-mono ${t.textFaint}`}>לא מוקצה</span>}
-                </td>
-                <td className="px-3 py-2.5"><PriorityBadge priority={m.priority} /></td>
                 <td className="px-3 py-2.5"><StatusBadge status={m.status} /></td>
                 <td className="px-3 py-2.5"><span className={`font-mono text-[11px] ${t.textFaint}`}>{formatElapsed(m.created_at)}</span></td>
                 <td className="px-3 py-2.5 text-left">
@@ -590,7 +538,6 @@ function RecentTripsTable({ missions, loading, t }: { missions: Mission[]; loadi
             <tr>
               <th className={th}>מסלול</th>
               <th className={th}>נוסעים</th>
-              <th className={th}>נהג</th>
               <th className={th}>סטטוס</th>
               <th className={th}>הושלם</th>
               <th className={th}>משך</th>
@@ -599,12 +546,12 @@ function RecentTripsTable({ missions, loading, t }: { missions: Mission[]; loadi
           <tbody>
             {loading ? Array.from({ length: 3 }).map((_, i) => (
               <tr key={i} className={`border-b ${t.border}`}>
-                {Array.from({ length: 6 }).map((_, j) => (
+                {Array.from({ length: 5 }).map((_, j) => (
                   <td key={j} className="px-3 py-2.5"><div className={`h-2.5 rounded animate-pulse ${t.skeleton}`} /></td>
                 ))}
               </tr>
             )) : recent.length === 0 ? (
-              <tr><td colSpan={6} className={`px-6 py-8 text-center text-xs font-mono tracking-wide ${t.emptyText}`}>אין נסיעות שהושלמו עדיין</td></tr>
+              <tr><td colSpan={5} className={`px-6 py-8 text-center text-xs font-mono tracking-wide ${t.emptyText}`}>אין נסיעות שהושלמו עדיין</td></tr>
             ) : recent.map(m => (
               <tr key={m.id} className={`border-b ${t.border} ${t.rowHover} transition-colors`}>
                 <td className="px-3 py-2.5 max-w-[220px]">
@@ -614,10 +561,6 @@ function RecentTripsTable({ missions, loading, t }: { missions: Mission[]; loadi
                 </td>
                 <td className="px-3 py-2.5 text-center">
                   <span className={`font-mono font-bold text-sm ${t.text}`}>{m.passengers}</span>
-                </td>
-                <td className="px-3 py-2.5">
-                  {m.driver ? <div className="flex items-center gap-1.5"><DriverAvatar name={m.driver.full_name} t={t} /><span className={`text-[10px] hidden xl:block leading-tight ${t.textSub}`}>{m.driver.full_name}</span></div>
-                  : <span className={`text-[10px] ${t.textFaint}`}>—</span>}
                 </td>
                 <td className="px-3 py-2.5"><StatusBadge status={m.status} /></td>
                 <td className="px-3 py-2.5"><span className={`font-mono text-[11px] ${t.textFaint}`}>{formatTime(m.completed_at ?? m.updated_at)}</span></td>
@@ -678,7 +621,6 @@ export default function ManagerDashboard() {
   const [dark, setDark] = useState(true);
   const t = getTheme(dark);
   const { missions, loading, error, lastRefresh, addMission, cancelMission } = useActiveMissions();
-  const { drivers, loading: driversLoading } = useDrivers();
   const activeMissionCount = missions.filter(m => (["pending","accepted","en_route"] as MissionStatus[]).includes(m.status)).length;
   const handleCancel = useCallback((id: string) => cancelMission(id, missions), [cancelMission, missions]);
   const [mobileTab, setMobileTab] = useState<"missions" | "dispatch">("missions");
@@ -690,7 +632,7 @@ export default function ManagerDashboard() {
   );
 
   const dispatchForm = (
-    <DispatchForm drivers={drivers} driversLoading={driversLoading} onMissionCreated={(m) => { addMission(m); setMobileTab("missions"); }} t={t} />
+    <DispatchForm onMissionCreated={(m) => { addMission(m); setMobileTab("missions"); }} t={t} />
   );
   const activeMissionsTable = (
     <ActiveMissionsTable missions={missions} loading={loading} lastRefresh={lastRefresh} onCancel={handleCancel} t={t} />

@@ -12,12 +12,9 @@ interface Mission {
   passengers: number
   priority: Priority
   status: MissionStatus
-  assigned_driver_id: string | null
   broadcast: boolean
   created_at: string
 }
-
-interface DriverMobileViewProps { driverId: string; driverName?: string }
 
 // ---------------------------------------------------------------------------
 // Theme
@@ -151,7 +148,7 @@ function EmptyState({ t }: { t: Th }) {
 // Root
 // ---------------------------------------------------------------------------
 
-export default function DriverMobileView({ driverId, driverName = 'נהג' }: DriverMobileViewProps) {
+export default function DriverMobileView() {
   const [dark, setDark] = useState(true)
   const t = getTheme(dark)
   const [missions, setMissions] = useState<Mission[]>([])
@@ -160,10 +157,9 @@ export default function DriverMobileView({ driverId, driverName = 'נהג' }: Dr
 
   const fetchMissions = useCallback(async () => {
     try {
-      const res = await fetch(`/api/missions?driver_id=${encodeURIComponent(driverId)}`)
+      const res = await fetch('/api/missions')
       const json = await res.json()
       const all: Mission[] = json.data ?? []
-      // Show only active (non-completed, non-cancelled) missions, oldest first
       setMissions(
         all
           .filter(m => m.status !== 'completed' && m.status !== 'cancelled')
@@ -173,9 +169,8 @@ export default function DriverMobileView({ driverId, driverName = 'נהג' }: Dr
       setError('שגיאה בטעינת שינועים')
       setTimeout(() => setError(null), 4000)
     }
-  }, [driverId])
+  }, [])
 
-  // Initial load + polling every 30s
   useEffect(() => {
     fetchMissions()
     const interval = setInterval(fetchMissions, 3_000)
@@ -188,10 +183,9 @@ export default function DriverMobileView({ driverId, driverName = 'נהג' }: Dr
       const res = await fetch(`/api/missions/${encodeURIComponent(missionId)}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'completed', driver_id: driverId }),
+        body: JSON.stringify({ status: 'completed', caller_role: 'driver' }),
       })
       if (!res.ok) throw new Error()
-      // Remove from local list immediately
       setMissions(prev => prev.filter(m => m.id !== missionId))
     } catch {
       setError('עדכון נכשל')
@@ -199,7 +193,7 @@ export default function DriverMobileView({ driverId, driverName = 'נהג' }: Dr
     } finally {
       setCompletingId(null)
     }
-  }, [driverId])
+  }, [])
 
   return (
     <div
@@ -209,8 +203,7 @@ export default function DriverMobileView({ driverId, driverName = 'נהג' }: Dr
       {/* Header */}
       <div className={`flex items-center justify-between px-5 pt-10 pb-4 border-b ${t.bgPanel} ${t.border}`}>
         <div>
-          <p className={`text-xs font-semibold ${t.textSub}`}>נהג</p>
-          <p className={`text-base font-bold ${t.text}`}>{driverName}</p>
+          <p className={`text-base font-bold ${t.text}`}>שינועים פעילים</p>
         </div>
         <div className="flex items-center gap-3">
           {missions.length > 0 && (

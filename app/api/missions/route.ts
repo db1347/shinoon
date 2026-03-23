@@ -1,11 +1,11 @@
 // app/api/missions/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getMissions, createMission } from "@/lib/localDb";
-import type { CreateMissionBody, Mission, ApiResponse } from "@/lib/types";
+import type { CreateMissionBody, Mission, MissionStatus, ApiResponse } from "@/lib/types";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(req.url);
-  const statusFilter   = searchParams.get("status") as Parameters<typeof getMissions>[0]["status"] | undefined;
+  const statusFilter   = searchParams.get("status") as MissionStatus | undefined;
   const driverIdFilter = searchParams.get("driver_id") ?? undefined;
   try {
     const missions = await getMissions({

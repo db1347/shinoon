@@ -1,42 +1,52 @@
 // lib/localDb.ts
 // Cloud KV store via @upstash/redis.
 // Local dev: set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in .env.local
-// (get these from Vercel → Integrations → Upstash → your Redis store → .env.local snippet).
+// Falls back to in-memory store when env vars are absent.
 
-import { Redis } from "@upstash/redis";
-
-const kv = Redis.fromEnv();
 import type { User, Mission, MissionStatus } from "./types";
-
-const DB_KEY = "shinoon:db";
 
 interface DbShape { users: User[]; missions: Mission[]; }
 
 const SEED_DATA: DbShape = {
   users: [
-    { id: "mgr-001", full_name: "רנ\"ג דוד כהן",        role: "manager", phone: "050-0000001", status: "available", created_at: "2025-01-01T00:00:00.000Z" },
-    { id: "d-001",   full_name: "רב\"ט יעקב לוי",        role: "driver",  phone: "050-0000101", status: "available", created_at: "2025-01-01T00:00:00.000Z" },
-    { id: "d-002",   full_name: "סמל שרה כהן",           role: "driver",  phone: "050-0000102", status: "available", created_at: "2025-01-01T00:00:00.000Z" },
-    { id: "d-003",   full_name: "טוראי דוד מזרחי",       role: "driver",  phone: "050-0000103", status: "available", created_at: "2025-01-01T00:00:00.000Z" },
-    { id: "d-004",   full_name: "רב\"ט נועה ברקת",       role: "driver",  phone: "050-0000104", status: "available", created_at: "2025-01-01T00:00:00.000Z" },
-    { id: "d-005",   full_name: "סמל ראשון אמיר גל",     role: "driver",  phone: "050-0000105", status: "offline",   created_at: "2025-01-01T00:00:00.000Z" },
-    { id: "d-006",   full_name: "טוראי מיכל אדרי",       role: "driver",  phone: "050-0000106", status: "available", created_at: "2025-01-01T00:00:00.000Z" },
+    { id: "mgr-001", full_name: "רנ\"ג דוד כהן",    role: "manager", phone: "050-0000001", status: "available", created_at: "2025-01-01T00:00:00.000Z" },
   ],
   missions: [],
 };
 
+// ---------------------------------------------------------------------------
+// In-memory fallback (used when Redis env vars are missing)
+// ---------------------------------------------------------------------------
+
+const memDb: DbShape = { users: [...SEED_DATA.users], missions: [] };
+
+// ---------------------------------------------------------------------------
+// Redis backend (lazy-initialised so missing env vars don't crash at import)
+// ---------------------------------------------------------------------------
+
+const hasRedis = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+
+const DB_KEY = "shinoon:db";
+
 async function readDb(): Promise<DbShape> {
+  if (!hasRedis) return memDb;
+  const { Redis } = await import("@upstash/redis");
+  const kv = Redis.fromEnv();
   const db = await kv.get<DbShape>(DB_KEY);
-  if (!db) {
-    await kv.set(DB_KEY, SEED_DATA);
-    return SEED_DATA;
-  }
+  if (!db) { await kv.set(DB_KEY, SEED_DATA); return SEED_DATA; }
   return db;
 }
 
 async function writeDb(db: DbShape): Promise<void> {
+  if (!hasRedis) return; // memDb is mutated in-place
+  const { Redis } = await import("@upstash/redis");
+  const kv = Redis.fromEnv();
   await kv.set(DB_KEY, db);
 }
+
+// ---------------------------------------------------------------------------
+// Exported functions
+// ---------------------------------------------------------------------------
 
 export async function getDrivers(): Promise<User[]> {
   const db = await readDb();
@@ -53,10 +63,7 @@ export async function getUserById(id: string): Promise<User | null> {
 export async function updateUserStatus(id: string, status: User["status"]): Promise<void> {
   const db = await readDb();
   const user = db.users.find(u => u.id === id);
-  if (user) {
-    user.status = status;
-    await writeDb(db);
-  }
+  if (user) { user.status = status; await writeDb(db); }
 }
 
 export async function getMissions(

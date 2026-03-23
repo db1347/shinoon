@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import OneSignal from 'react-onesignal'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const window: Window & { OneSignal?: any; OneSignalDeferred?: Array<(os: any) => void> }
 
 type MissionStatus = 'pending' | 'accepted' | 'en_route' | 'completed' | 'cancelled'
 type Priority = 'low' | 'normal' | 'high' | 'urgent'
@@ -213,22 +215,24 @@ export default function DriverMobileView() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [isShiftStarted, loadMissions])
 
-  // ── OneSignal init (runs once on mount) — bonus instant push ─────────────
+  // ── OneSignal — hook into CDN global once it's ready ────────────────────
 
   useEffect(() => {
-    const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID
-    if (!appId) return
-
-    OneSignal.init({
-      appId,
-      allowLocalhostAsSecureOrigin: true,
-    }).then(() => {
+    const setup = (os: NonNullable<typeof window.OneSignal>) => {
       setOsReady(true)
-      OneSignal.Notifications.addEventListener('foregroundWillDisplay', (event) => {
+      os.Notifications.addEventListener('foregroundWillDisplay', (event: { preventDefault: () => void }) => {
         event.preventDefault()
         loadMissions()
       })
-    }).catch(err => console.error('[OneSignal] init error:', err))
+    }
+
+    if (window.OneSignal) {
+      setup(window.OneSignal)
+    } else {
+      // CDN script loads async — wait for it
+      window.OneSignalDeferred = window.OneSignalDeferred || []
+      window.OneSignalDeferred.push((os) => setup(os))
+    }
   }, [loadMissions])
 
   // ── Start shift ──────────────────────────────────────────────────────────

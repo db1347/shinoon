@@ -37,6 +37,13 @@ export default function RootLayout({
         <meta name="theme-color" content="#0a0a0a" />
         <meta name="mobile-web-app-capable" content="yes" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
+        <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+        <script dangerouslySetInnerHTML={{ __html: `
+          window.OneSignalDeferred = window.OneSignalDeferred || [];
+          OneSignalDeferred.push(async function(OneSignal) {
+            await OneSignal.init({ appId: "79040570-116d-4e8e-b676-c00c6dd1c9f6" });
+          });
+        `}} />
       </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

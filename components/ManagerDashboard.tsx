@@ -309,7 +309,7 @@ function DispatchForm({ drivers, driversLoading, onMissionCreated, t }: {
       try { created = await postMission(payload); }
       catch {
         created = { ...payload, id: `MSN-${7800 + Math.floor(Math.random() * 100)}`, broadcast: form.broadcast,
-          accepted_at: null, completed_at: null,
+          accepted_at: undefined, completed_at: undefined,
           driver: available.find(d => d.id === form.assigned_driver_id) };
       }
       onMissionCreated(created as Mission);

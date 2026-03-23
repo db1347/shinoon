@@ -1,6 +1,7 @@
 // app/api/missions/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getMissions, createMission } from "@/lib/localDb";
+import { pushMissionNotification } from "@/lib/onesignal";
 import type { CreateMissionBody, Mission, MissionStatus, ApiResponse } from "@/lib/types";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -47,6 +48,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<M
       accepted_at:        null,
       completed_at:       null,
     });
+    // Fire-and-forget push — don't block the response
+    pushMissionNotification(pickup_location.trim());
     return NextResponse.json({ data: mission, error: null }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/missions]", err);

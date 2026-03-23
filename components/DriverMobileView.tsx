@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import OneSignal from 'react-onesignal'
 
 type MissionStatus = 'pending' | 'accepted' | 'en_route' | 'completed' | 'cancelled'
 type Priority = 'low' | 'normal' | 'high' | 'urgent'
@@ -17,7 +18,7 @@ interface Mission {
 }
 
 // ---------------------------------------------------------------------------
-// Audio — MP3 alert (unlocked via user gesture on shift start)
+// Audio
 // ---------------------------------------------------------------------------
 
 function playBeep() {
@@ -26,35 +27,6 @@ function playBeep() {
     audio.volume = 0.8
     audio.play().catch(() => {})
   } catch { /* ignore */ }
-}
-
-async function fireNotification(title: string, body: string) {
-  if (typeof Notification === 'undefined') return
-  if (Notification.permission !== 'granted') return
-
-  // Android requires icon + vibrate to surface in system tray
-  const opts = {
-    body,
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
-    vibrate: [200, 100, 200],
-    tag: 'mission-alert',
-    renotify: true,
-  } as NotificationOptions
-
-  try {
-    if ('serviceWorker' in navigator) {
-      const reg = await navigator.serviceWorker.ready
-      await reg.showNotification(title, opts)
-      return
-    }
-  } catch (err) {
-    console.error('[notification] SW showNotification failed:', err)
-  }
-  // Desktop fallback
-  try { new Notification(title, opts) } catch (err) {
-    console.error('[notification] direct Notification failed:', err)
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -114,34 +86,26 @@ function MissionCard({ mission, onComplete, completing, t }: {
     <div className={`rounded-2xl border overflow-hidden shadow-sm ${t.bgCard} ${t.borderMd}`}>
       <div className="px-5 pt-5 pb-4 flex flex-col gap-4">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex-shrink-0 text-emerald-500">
-            <MapPinIcon className="w-5 h-5" />
-          </div>
+          <div className="mt-0.5 flex-shrink-0 text-emerald-500"><MapPinIcon /></div>
           <div>
             <p className={`text-xs font-semibold mb-0.5 ${t.textSub}`}>איסוף</p>
             <p className={`text-lg font-bold leading-snug ${t.text}`}>{mission.pickup_location}</p>
           </div>
         </div>
-
         <div className={`h-px mx-8 ${t.dark ? 'bg-neutral-800' : 'bg-slate-200'}`} />
-
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex-shrink-0 text-blue-500">
-            <FlagIcon className="w-5 h-5" />
-          </div>
+          <div className="mt-0.5 flex-shrink-0 text-blue-500"><FlagIcon /></div>
           <div>
             <p className={`text-xs font-semibold mb-0.5 ${t.textSub}`}>יעד</p>
             <p className={`text-lg font-bold leading-snug ${t.text}`}>{mission.destination}</p>
           </div>
         </div>
-
         <div className={`flex items-center gap-3 rounded-xl px-4 py-3 ${t.dark ? 'bg-neutral-800/60' : 'bg-slate-100'}`}>
-          <div className={t.textSub}><UserIcon className="w-5 h-5" /></div>
+          <div className={t.textSub}><UserIcon /></div>
           <p className={`text-xs font-semibold ${t.textSub}`}>נוסעים</p>
           <p className={`text-2xl font-black mr-auto ${t.text}`}>{mission.passengers}</p>
         </div>
       </div>
-
       <div className="px-4 pb-4">
         <button
           onClick={() => onComplete(mission.id)}
@@ -156,7 +120,7 @@ function MissionCard({ mission, onComplete, completing, t }: {
 }
 
 // ---------------------------------------------------------------------------
-// Pre-shift gate
+// Shift Gate
 // ---------------------------------------------------------------------------
 
 function ShiftGate({ onStart, t }: { onStart: () => void; t: Th }) {
@@ -176,15 +140,13 @@ function ShiftGate({ onStart, t }: { onStart: () => void; t: Th }) {
 }
 
 // ---------------------------------------------------------------------------
-// Waiting state (shift started, no missions yet)
+// Waiting state
 // ---------------------------------------------------------------------------
 
 function WaitingState({ t }: { t: Th }) {
   return (
     <div className="flex flex-col items-center justify-center flex-1 px-6 py-20 text-center">
-      <div className={`text-6xl font-black mb-4 ${t.text}`} style={{ letterSpacing: '0.1em' }}>
-        המתנה
-      </div>
+      <div className={`text-6xl font-black mb-4 ${t.text}`} style={{ letterSpacing: '0.1em' }}>המתנה</div>
       <div className={`h-1 w-24 mx-auto rounded-full mb-6 ${t.dark ? 'bg-neutral-700' : 'bg-slate-300'}`} />
       <div className="flex items-center gap-2.5 justify-center">
         <span className="relative flex h-3 w-3">
@@ -202,50 +164,23 @@ function WaitingState({ t }: { t: Th }) {
 // ---------------------------------------------------------------------------
 
 export default function DriverMobileView() {
-  const [dark, setDark] = useState(true)
+  const [dark, setDark]               = useState(true)
+  const [isShiftStarted, setIsShiftStarted] = useState(false)
+  const [missions, setMissions]       = useState<Mission[]>([])
+  const [completingId, setCompletingId] = useState<string | null>(null)
+  const [error, setError]             = useState<string | null>(null)
+  const [osReady, setOsReady]         = useState(false)
   const t = getTheme(dark)
 
-  const [isShiftStarted, setIsShiftStarted] = useState(false)
-  const [missions, setMissions] = useState<Mission[]>([])
-  const [completingId, setCompletingId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // ── Fetch active missions ────────────────────────────────────────────────
 
-  // Register Service Worker once on mount (needed for mobile system notifications)
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {})
-    }
-  }, [])
-
-  // Track IDs seen in the previous poll to detect new arrivals
-  const prevIdsRef = useRef<Set<string>>(new Set())
-  // Flag to skip alert on the very first fetch (don't beep for existing missions)
-  const isFirstFetchRef = useRef(true)
-
-  const doFetch = useCallback(async (): Promise<void> => {
+  const loadMissions = useCallback(async () => {
     try {
-      const res = await fetch('/api/missions')
+      const res  = await fetch('/api/missions')
       const json = await res.json()
       const active: Mission[] = (json.data ?? [])
         .filter((m: Mission) => m.status !== 'completed' && m.status !== 'cancelled')
         .sort((a: Mission, b: Mission) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-
-      if (isFirstFetchRef.current) {
-        // Seed the known-IDs set silently — no alert for pre-existing missions
-        isFirstFetchRef.current = false
-        prevIdsRef.current = new Set(active.map(m => m.id))
-        setMissions(active)
-        return
-      }
-
-      // Detect new missions
-      const newMissions = active.filter(m => !prevIdsRef.current.has(m.id))
-      if (newMissions.length > 0) {
-        playBeep()
-        for (const m of newMissions) await fireNotification('שינוע חדש התקבל!', 'איסוף: ' + m.pickup_location)
-      }
-
-      prevIdsRef.current = new Set(active.map(m => m.id))
       setMissions(active)
     } catch {
       setError('שגיאה בטעינת שינועים')
@@ -253,37 +188,64 @@ export default function DriverMobileView() {
     }
   }, [])
 
-  // Polling only starts after shift begins
+  // ── OneSignal init (runs once on mount) ─────────────────────────────────
+
   useEffect(() => {
-    if (!isShiftStarted) return
-    doFetch()
-    const interval = setInterval(doFetch, 3_000)
-    return () => clearInterval(interval)
-  }, [isShiftStarted, doFetch])
+    const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID
+    if (!appId) { console.warn('[OneSignal] NEXT_PUBLIC_ONESIGNAL_APP_ID not set'); return }
+
+    OneSignal.init({
+      appId,
+      serviceWorkerPath: '/OneSignalSDKWorker.js',
+      notifyButton: { enable: false },
+      allowLocalhostAsSecureOrigin: true,
+    }).then(() => {
+      setOsReady(true)
+
+      // When a push notification arrives while the app is open → reload missions + play sound
+      OneSignal.Notifications.addEventListener('foregroundWillDisplay', (event) => {
+        event.preventDefault() // don't show the default in-app banner
+        playBeep()
+        loadMissions()
+      })
+
+      // Also reload when the app becomes visible again (user taps notification to open)
+      const onVisible = () => { if (document.visibilityState === 'visible') loadMissions() }
+      document.addEventListener('visibilitychange', onVisible)
+      return () => document.removeEventListener('visibilitychange', onVisible)
+    }).catch(err => console.error('[OneSignal] init error:', err))
+  }, [loadMissions])
+
+  // ── Start shift ──────────────────────────────────────────────────────────
 
   const handleStartShift = useCallback(async () => {
-    // Play immediately on the user gesture to unlock audio autoplay policy
-    playBeep()
+    playBeep() // unlock audio on user gesture
 
-    // Request notification permission
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      await Notification.requestPermission()
+    if (osReady) {
+      try {
+        // Prompt the OS push permission dialog
+        await OneSignal.Notifications.requestPermission()
+      } catch (err) {
+        console.error('[OneSignal] requestPermission error:', err)
+      }
     }
 
     setIsShiftStarted(true)
-  }, [])
+    loadMissions()
+  }, [osReady, loadMissions])
+
+  // ── Complete mission ─────────────────────────────────────────────────────
 
   const handleComplete = useCallback(async (missionId: string) => {
     setCompletingId(missionId)
     try {
       const res = await fetch(`/api/missions/${encodeURIComponent(missionId)}/status`, {
-        method: 'PATCH',
+        method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'completed', caller_role: 'driver' }),
+        body:    JSON.stringify({ status: 'completed', caller_role: 'driver' }),
       })
       if (!res.ok) throw new Error()
       setMissions(prev => prev.filter(m => m.id !== missionId))
-      prevIdsRef.current.delete(missionId)
     } catch {
       setError('עדכון נכשל')
       setTimeout(() => setError(null), 4000)
@@ -291,6 +253,8 @@ export default function DriverMobileView() {
       setCompletingId(null)
     }
   }, [])
+
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -317,20 +281,20 @@ export default function DriverMobileView() {
               {missions.length} שינועים
             </span>
           )}
+          {/* Manual refresh */}
           {isShiftStarted && (
             <button
-              onClick={() => { playBeep(); fireNotification('בדיקת התראה', 'ההתראות עובדות!') }}
-              title="בדיקת התראה"
+              onClick={loadMissions}
               className={`px-2.5 py-1.5 rounded-full border text-xs font-mono transition-all
                 ${t.dark ? 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:bg-neutral-800' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-100'}`}
             >
-              🔔
+              ↻
             </button>
           )}
           <button
             onClick={() => setDark(d => !d)}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-full border text-xs font-mono transition-all shadow
-              ${dark ? "bg-neutral-900 border-neutral-700 text-neutral-300 hover:bg-neutral-800" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-100"}`}
+              ${dark ? 'bg-neutral-900 border-neutral-700 text-neutral-300 hover:bg-neutral-800' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-100'}`}
           >
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>

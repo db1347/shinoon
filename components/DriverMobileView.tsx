@@ -232,22 +232,19 @@ export default function DriverMobileView() {
     }).catch(err => console.error('[OneSignal] init error:', err))
   }, [loadMissions])
 
+  // ── Request push permission once both shift is started and OneSignal is ready
+  useEffect(() => {
+    if (!osReady || !isShiftStarted) return
+    OneSignal.Notifications.requestPermission().catch(() => {})
+  }, [osReady, isShiftStarted])
+
   // ── Start shift ──────────────────────────────────────────────────────────
 
-  const handleStartShift = useCallback(async () => {
+  const handleStartShift = useCallback(() => {
     playBeep() // unlock audio on user gesture
-
-    if (osReady) {
-      try {
-        await OneSignal.Notifications.requestPermission()
-      } catch (err) {
-        console.error('[OneSignal] requestPermission error:', err)
-      }
-    }
-
     setIsShiftStarted(true)
     loadMissions()
-  }, [osReady, loadMissions])
+  }, [loadMissions])
 
   // ── Complete mission ─────────────────────────────────────────────────────
 

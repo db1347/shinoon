@@ -1,9 +1,11 @@
 // lib/localDb.ts
-// Cloud KV store via @vercel/kv.
-// Local dev: run `vercel env pull .env.local` to get KV_REST_API_URL + KV_REST_API_TOKEN,
-// or set them manually from your Vercel project → Storage → KV → .env.local snippet.
+// Cloud KV store via @upstash/redis.
+// Local dev: set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in .env.local
+// (get these from Vercel → Integrations → Upstash → your Redis store → .env.local snippet).
 
-import { kv } from "@vercel/kv";
+import { Redis } from "@upstash/redis";
+
+const kv = Redis.fromEnv();
 import type { User, Mission, MissionStatus } from "./types";
 
 const DB_KEY = "shinoon:db";

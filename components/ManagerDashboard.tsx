@@ -8,14 +8,12 @@ import React, { useState, useEffect, useCallback, useReducer, useRef } from "rea
 
 type MissionStatus = "pending" | "accepted" | "en_route" | "completed" | "cancelled";
 type Priority = "low" | "normal" | "high" | "urgent";
-type DriverStatus = "available" | "on_mission" | "offline";
 
-interface Driver { id: string; full_name: string; role: "manager" | "driver"; phone: string; status: DriverStatus; }
 interface Mission {
   id: string; pickup_location: string; destination: string; passengers: number;
   priority: Priority; status: MissionStatus; assigned_driver_id?: string; broadcast: boolean;
   created_by: string; created_at: string; updated_at: string;
-  accepted_at?: string; completed_at?: string; driver?: Driver;
+  accepted_at?: string; completed_at?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,44 +53,6 @@ function getTheme(dark: boolean): Th {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data (fallback when API is unavailable)
-// ---------------------------------------------------------------------------
-
-const MOCK_DRIVERS: Driver[] = [
-  { id: "d-001", full_name: "רב\"ט יעקב לוי",    role: "driver", phone: "050-0000101", status: "available"  },
-  { id: "d-002", full_name: "סמל שרה כהן",       role: "driver", phone: "050-0000102", status: "available"  },
-  { id: "d-003", full_name: "טוראי דוד מזרחי",   role: "driver", phone: "050-0000103", status: "on_mission" },
-  { id: "d-004", full_name: "רב\"ט נועה ברקת",   role: "driver", phone: "050-0000104", status: "available"  },
-  { id: "d-005", full_name: "סמל אמיר גל",       role: "driver", phone: "050-0000105", status: "offline"    },
-  { id: "d-006", full_name: "טוראי מיכל אדרי",   role: "driver", phone: "050-0000106", status: "on_mission" },
-];
-
-const minsAgo = (m: number) => new Date(Date.now() - m * 60000).toISOString();
-
-const MOCK_MISSIONS: Mission[] = [
-  { id: "MSN-7841", pickup_location: "בסיס אלפא, שער מזרח", destination: "מחסן מגזר 4", passengers: 8,
-    priority: "urgent", status: "en_route", assigned_driver_id: "d-003", broadcast: false,
-    created_by: "mgr-001", created_at: minsAgo(42), updated_at: minsAgo(38), accepted_at: minsAgo(40), driver: MOCK_DRIVERS[2] },
-  { id: "MSN-7842", pickup_location: "עמדת ברבו, מפרץ 3", destination: "בית חולים שדה 7", passengers: 3,
-    priority: "high", status: "accepted", assigned_driver_id: "d-006", broadcast: false,
-    created_by: "mgr-001", created_at: minsAgo(18), updated_at: minsAgo(15), accepted_at: minsAgo(15), driver: MOCK_DRIVERS[5] },
-  { id: "MSN-7843", pickup_location: "מחסן רכש ראשי", destination: "עמדת תצפית צ'ארלי", passengers: 12,
-    priority: "normal", status: "pending", broadcast: true,
-    created_by: "mgr-001", created_at: minsAgo(5), updated_at: minsAgo(5) },
-  { id: "MSN-7844", pickup_location: "מבנה מודיעין, קומה 2", destination: "בונקר פיקוד", passengers: 2,
-    priority: "low", status: "pending", assigned_driver_id: "d-001", broadcast: false,
-    created_by: "mgr-001", created_at: minsAgo(2), updated_at: minsAgo(2), driver: MOCK_DRIVERS[0] },
-  { id: "MSN-7839", pickup_location: "מחסן דלק ברבו", destination: "קו קדמי דלתא", passengers: 6,
-    priority: "high", status: "completed", assigned_driver_id: "d-002", broadcast: false,
-    created_by: "mgr-001", created_at: minsAgo(120), updated_at: minsAgo(60),
-    accepted_at: minsAgo(118), completed_at: minsAgo(60), driver: MOCK_DRIVERS[1] },
-  { id: "MSN-7838", pickup_location: "חמש\"ן, שער ג'", destination: "מחלקת אקו, אימונים 5", passengers: 4,
-    priority: "normal", status: "completed", assigned_driver_id: "d-004", broadcast: false,
-    created_by: "mgr-001", created_at: minsAgo(200), updated_at: minsAgo(130),
-    accepted_at: minsAgo(198), completed_at: minsAgo(130), driver: MOCK_DRIVERS[3] },
-];
-
-// ---------------------------------------------------------------------------
 // API helpers
 // ---------------------------------------------------------------------------
 
@@ -102,16 +62,7 @@ const fetchMissions = async (): Promise<Mission[]> => {
     if (!res.ok) throw new Error();
     const json = await res.json();
     return json.data ?? json;
-  } catch { return MOCK_MISSIONS; }
-};
-
-const fetchDrivers = async (): Promise<Driver[]> => {
-  try {
-    const res = await fetch("/api/drivers");
-    if (!res.ok) throw new Error();
-    const json = await res.json();
-    return json.data ?? json;
-  } catch { return MOCK_DRIVERS; }
+  } catch { return []; }
 };
 
 const postMission = async (payload: Partial<Mission>): Promise<Mission> => {
@@ -137,20 +88,6 @@ const formatElapsed = (iso: string): string => {
 const formatTime = (iso?: string): string => {
   if (!iso) return "—";
   return new Date(iso).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
-};
-
-const initials = (name: string): string =>
-  name.split(" ").filter(w => w.match(/^[\u05D0-\u05EAA-Za-z"]/)).slice(-2).map(w => w[0]).join("");
-
-// ---------------------------------------------------------------------------
-// Style maps
-// ---------------------------------------------------------------------------
-
-const PRIORITY_STYLES: Record<Priority, { badge: string; label: string; button: string; buttonActive: string }> = {
-  low:    { badge: "bg-slate-700 text-slate-300 border-slate-600",            label: "נמוכה", button: "border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200",     buttonActive: "bg-slate-600 border-slate-500 text-slate-100"    },
-  normal: { badge: "bg-blue-900/60 text-blue-300 border-blue-700",            label: "רגילה", button: "border-blue-700 text-blue-400 hover:border-blue-500 hover:text-blue-200",         buttonActive: "bg-blue-800 border-blue-600 text-blue-100"       },
-  high:   { badge: "bg-orange-900/60 text-orange-300 border-orange-700",      label: "גבוהה", button: "border-orange-700 text-orange-400 hover:border-orange-500 hover:text-orange-200", buttonActive: "bg-orange-800 border-orange-600 text-orange-100" },
-  urgent: { badge: "bg-red-900/70 text-red-300 border-red-700 animate-pulse", label: "דחוף",  button: "border-red-700 text-red-400 hover:border-red-500 hover:text-red-200",             buttonActive: "bg-red-800 border-red-600 text-red-100"          },
 };
 
 const STATUS_STYLES: Record<MissionStatus, { badge: string; dot: string; label: string }> = {
@@ -224,21 +161,9 @@ function useActiveMissions() {
   return { missions, loading, error, lastRefresh, addMission, cancelMission };
 }
 
-function useDrivers() {
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => { fetchDrivers().then(d => { setDrivers(d); setLoading(false); }); }, []);
-  return { drivers, loading };
-}
-
 // ---------------------------------------------------------------------------
 // Atoms
 // ---------------------------------------------------------------------------
-
-function PriorityBadge({ priority }: { priority: Priority }) {
-  const s = PRIORITY_STYLES[priority];
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold border tracking-wide ${s.badge}`}>{s.label}</span>;
-}
 
 function StatusBadge({ status }: { status: MissionStatus }) {
   const s = STATUS_STYLES[status];
@@ -246,14 +171,6 @@ function StatusBadge({ status }: { status: MissionStatus }) {
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono font-bold border tracking-wide ${s.badge}`}>
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.dot}`} />
       {s.label}
-    </span>
-  );
-}
-
-function DriverAvatar({ name, t }: { name: string; t: Th }) {
-  return (
-    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full border text-[10px] font-mono font-bold flex-shrink-0 ${t.dark ? "bg-slate-700 border-slate-500 text-slate-200" : "bg-slate-200 border-slate-300 text-slate-700"}`}>
-      {initials(name)}
     </span>
   );
 }
@@ -303,12 +220,7 @@ function DispatchForm({ onMissionCreated, t }: {
     };
 
     try {
-      let created: Mission;
-      try { created = await postMission(payload); }
-      catch {
-        created = { ...payload, id: `MSN-${7800 + Math.floor(Math.random() * 100)}`, broadcast: true,
-          accepted_at: undefined, completed_at: undefined };
-      }
+      const created = await postMission(payload);
       onMissionCreated(created as Mission);
       setForm(EMPTY_FORM);
       setSuccessFlash(true);
@@ -385,9 +297,7 @@ const STATUS_FILTERS = [
   { label: "בדרך",    value: "en_route" },
 ] as const;
 
-type SortKey = "id" | "pickup_location" | "status" | "created_at" | "passengers";
-const PRIORITY_ORDER: Record<Priority, number>      = { urgent: 0, high: 1, normal: 2, low: 3 };
-const STATUS_ORDER:   Record<MissionStatus, number> = { en_route: 0, accepted: 1, pending: 2, completed: 3, cancelled: 4 };
+type SortKey = "id" | "pickup_location" | "created_at" | "passengers";
 
 function ActiveMissionsTable({ missions, loading, lastRefresh, onCancel, t }: {
   missions: Mission[]; loading: boolean; lastRefresh: Date; onCancel: (id: string) => void; t: Th;
@@ -406,7 +316,6 @@ function ActiveMissionsTable({ missions, loading, lastRefresh, onCancel, t }: {
     if      (sortKey === "id")              cmp = a.id.localeCompare(b.id);
     else if (sortKey === "pickup_location") cmp = a.pickup_location.localeCompare(b.pickup_location);
     else if (sortKey === "passengers")      cmp = a.passengers - b.passengers;
-    else if (sortKey === "status")          cmp = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
     else if (sortKey === "created_at")      cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     return sortDir === "asc" ? cmp : -cmp;
   });
@@ -456,7 +365,6 @@ function ActiveMissionsTable({ missions, loading, lastRefresh, onCancel, t }: {
             <tr>
               <th className={th} onClick={() => handleSort("pickup_location")}>מסלול <SI k="pickup_location" /></th>
               <th className={th} onClick={() => handleSort("passengers")}>נוסעים <SI k="passengers" /></th>
-              <th className={th} onClick={() => handleSort("status")}>סטטוס <SI k="status" /></th>
               <th className={th} onClick={() => handleSort("created_at")}>שחלף <SI k="created_at" /></th>
               <th className={`${th} text-left`}>פעולות</th>
             </tr>
@@ -464,12 +372,12 @@ function ActiveMissionsTable({ missions, loading, lastRefresh, onCancel, t }: {
           <tbody>
             {loading ? Array.from({ length: 3 }).map((_, i) => (
               <tr key={i} className={`border-b ${t.border}`}>
-                {Array.from({ length: 5 }).map((_, j) => (
+                {Array.from({ length: 4 }).map((_, j) => (
                   <td key={j} className="px-3 py-3"><div className={`h-3 rounded animate-pulse ${t.skeleton}`} /></td>
                 ))}
               </tr>
             )) : sorted.length === 0 ? (
-              <tr><td colSpan={5} className="px-6 py-12 text-center">
+              <tr><td colSpan={4} className="px-6 py-12 text-center">
                 <div className={`flex flex-col items-center gap-3 ${t.emptyText}`}>
                   <span className="text-4xl">◼</span>
                   <span className="font-mono text-sm tracking-wide">אין שינועים פעילים</span>
@@ -487,7 +395,6 @@ function ActiveMissionsTable({ missions, loading, lastRefresh, onCancel, t }: {
                 <td className="px-3 py-2.5 text-center">
                   <span className={`font-mono font-bold text-sm ${t.text}`}>{m.passengers}</span>
                 </td>
-                <td className="px-3 py-2.5"><StatusBadge status={m.status} /></td>
                 <td className="px-3 py-2.5"><span className={`font-mono text-[11px] ${t.textFaint}`}>{formatElapsed(m.created_at)}</span></td>
                 <td className="px-3 py-2.5 text-left">
                   <div className="flex items-center justify-start gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">

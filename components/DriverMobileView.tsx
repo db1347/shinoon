@@ -197,7 +197,6 @@ export default function DriverMobileView() {
     OneSignal.init({
       appId,
       serviceWorkerPath: '/OneSignalSDKWorker.js',
-      notifyButton: { enable: false },
       allowLocalhostAsSecureOrigin: true,
     }).then(() => {
       setOsReady(true)

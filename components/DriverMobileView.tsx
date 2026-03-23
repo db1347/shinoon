@@ -28,10 +28,17 @@ function playBeep() {
   } catch { /* ignore */ }
 }
 
-function fireNotification(pickup: string) {
+async function fireNotification(pickup: string) {
   if (typeof Notification === 'undefined') return
   if (Notification.permission !== 'granted') return
-  new Notification('שינוע חדש התקבל!', { body: 'איסוף: ' + pickup })
+  const opts: NotificationOptions = { body: 'איסוף: ' + pickup }
+  try {
+    // Service Worker path — required for real system tray notifications on mobile
+    const reg = await navigator.serviceWorker?.ready
+    if (reg) { reg.showNotification('שינוע חדש התקבל!', opts); return }
+  } catch { /* fall through */ }
+  // Desktop fallback
+  new Notification('שינוע חדש התקבל!', opts)
 }
 
 // ---------------------------------------------------------------------------
@@ -187,12 +194,19 @@ export default function DriverMobileView() {
   const [completingId, setCompletingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // Register Service Worker once on mount (needed for mobile system notifications)
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {})
+    }
+  }, [])
+
   // Track IDs seen in the previous poll to detect new arrivals
   const prevIdsRef = useRef<Set<string>>(new Set())
   // Flag to skip alert on the very first fetch (don't beep for existing missions)
   const isFirstFetchRef = useRef(true)
 
-  const doFetch = useCallback(async () => {
+  const doFetch = useCallback(async (): Promise<void> => {
     try {
       const res = await fetch('/api/missions')
       const json = await res.json()
@@ -212,7 +226,7 @@ export default function DriverMobileView() {
       const newMissions = active.filter(m => !prevIdsRef.current.has(m.id))
       if (newMissions.length > 0) {
         playBeep()
-        newMissions.forEach(m => fireNotification(m.pickup_location))
+        for (const m of newMissions) await fireNotification(m.pickup_location)
       }
 
       prevIdsRef.current = new Set(active.map(m => m.id))

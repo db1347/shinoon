@@ -15,16 +15,19 @@ export async function pushMissionNotification(pickup: string) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        app_id: appId,
+        app_id:            appId,
+        target_channel:    'push',
         included_segments: ['Total Subscriptions'],
-        headings: { en: 'שינוע חדש התקבל!' },
-        contents: { en: `איסוף: ${pickup}` },
-        url:      '/driver',
+        headings:          { en: 'שינוע חדש התקבל!' },
+        contents:          { en: `איסוף: ${pickup}` },
+        url:               `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://shinoon.vercel.app'}/driver`,
       }),
     })
+    const body = await res.text()
     if (!res.ok) {
-      const body = await res.text()
       console.error('[OneSignal] push failed:', res.status, body)
+    } else {
+      console.log('[OneSignal] push sent:', body)
     }
   } catch (err) {
     console.error('[OneSignal] push error:', err)

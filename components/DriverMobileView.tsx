@@ -178,6 +178,7 @@ export default function DriverMobileView() {
   const [osReady, setOsReady]         = useState(false)
   const [pushStatus, setPushStatus]   = useState<PushStatus>('unknown')
   const [testLoading, setTestLoading] = useState(false)
+  const [testResult, setTestResult]   = useState<string | null>(null)
   const prevCountRef                  = useRef<number>(0)
   const t = getTheme(dark)
 
@@ -312,13 +313,13 @@ export default function DriverMobileView() {
 
   const handleTestNotification = useCallback(async () => {
     setTestLoading(true)
-    console.log('[TEST] Sending test push notification...')
+    setTestResult(null)
     try {
       const res = await fetch('/api/test-notification', { method: 'POST' })
       const json = await res.json()
-      console.log('[TEST] Response:', json)
+      setTestResult(JSON.stringify(json, null, 2))
     } catch (e) {
-      console.error('[TEST] Failed:', e)
+      setTestResult(String(e))
     } finally {
       setTestLoading(false)
     }
@@ -414,6 +415,14 @@ export default function DriverMobileView() {
           >
             {testLoading ? '...' : 'TEST'}
           </button>
+        </div>
+      )}
+
+      {/* Test result */}
+      {testResult && (
+        <div className="mx-4 mt-2 rounded-xl border border-blue-600 bg-blue-950 px-4 py-3">
+          <p className="text-xs font-bold text-blue-300 mb-1">OneSignal Response:</p>
+          <pre className="text-xs text-blue-100 whitespace-pre-wrap break-all">{testResult}</pre>
         </div>
       )}
 

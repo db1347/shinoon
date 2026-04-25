@@ -11,7 +11,7 @@ Shinoon is a transport mission coordination system with two distinct interfaces:
 - **Manager Dashboard** — Create, assign, and track missions in real time
 - **Driver Mobile View** — Receive, accept, and complete missions on the go
 
-Missions flow through a clear lifecycle: `pending → accepted → en_route → completed` (or `cancelled`). Managers control the flow; drivers act on it. Everything syncs instantly via Server-Sent Events and OneSignal push notifications.
+Missions flow through a clear lifecycle: `pending → accepted → en_route → completed` (or `cancelled`). Managers control the flow; drivers act on it. Everything syncs instantly via Server-Sent Events and native Web Push notifications (VAPID) — no third-party push service required.
 
 ---
 
@@ -66,7 +66,7 @@ Missions flow through a clear lifecycle: `pending → accepted → en_route → 
 | Language | TypeScript 5 |
 | UI | React 19, Tailwind CSS 4 |
 | Database | Upstash Redis (in-memory fallback for dev) |
-| Push Notifications | OneSignal |
+| Push Notifications | Native Web Push (VAPID) via `web-push` |
 | Real-time | Server-Sent Events (SSE) |
 | Deployment | Vercel |
 | PWA | Service Worker + Web App Manifest |
@@ -86,20 +86,23 @@ app/
     ├── missions/route.ts       # GET, POST /api/missions
     ├── missions/[id]/status/   # PATCH /api/missions/[id]/status
     ├── missions/stream/        # GET /api/missions/stream (SSE)
+    ├── subscribe/              # POST / DELETE — Web Push subscription mgmt
     └── test-notification/      # POST /api/test-notification
 
 components/
-├── ManagerDashboard.tsx        # Manager UI (~750 lines)
-└── DriverMobileView.tsx        # Driver UI (~450 lines)
+├── ManagerDashboard.tsx        # Manager UI
+└── DriverMobileView.tsx        # Driver UI
 
 lib/
 ├── types.ts                    # Shared TypeScript types & enums
 ├── localDb.ts                  # Redis / in-memory data layer
-└── onesignal.ts                # Push notification helper
+├── logger.ts                   # Level-based server logger
+├── push.ts                     # Server-side Web Push sender (web-push + VAPID)
+└── pushClient.ts               # Browser-side feature detection + subscribe flow
 
 public/
 ├── manifest.json               # PWA manifest
-├── OneSignalSDKWorker.js       # Service worker for push
+├── sw.js                       # Service worker — push + notificationclick
 ├── alert.mp3                   # Mission arrival beep
 └── icon-192.png, icon-512.png  # App icons
 
@@ -118,7 +121,9 @@ data/
 | `/api/missions` | POST | Create a new mission |
 | `/api/missions/[id]/status` | PATCH | Update mission status |
 | `/api/missions/stream` | GET | SSE stream for real-time mission updates |
-| `/api/test-notification` | POST | Trigger a test push notification |
+| `/api/subscribe` | POST | Register a browser PushSubscription |
+| `/api/subscribe` | DELETE | Remove a PushSubscription by endpoint |
+| `/api/test-notification` | POST | Fan out a test push to every stored subscription |
 
 ### Create Mission — POST `/api/missions`
 
@@ -169,17 +174,18 @@ npm install
 Create a `.env.local` file in the project root:
 
 ```bash
-# Upstash Redis (cloud persistence)
+# Upstash Redis (cloud persistence — optional)
 UPSTASH_REDIS_REST_URL=your_upstash_url
 UPSTASH_REDIS_REST_TOKEN=your_upstash_token
 
-# OneSignal (push notifications)
-NEXT_PUBLIC_ONESIGNAL_APP_ID=your_onesignal_app_id
-ONESIGNAL_APP_ID=your_onesignal_app_id
-ONESIGNAL_REST_API_KEY=your_onesignal_rest_api_key
+# Native Web Push (VAPID). Generate once with:
+#   node -e "console.log(require('web-push').generateVAPIDKeys())"
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_public_key
+VAPID_PRIVATE_KEY=your_private_key
+VAPID_CONTACT=mailto:you@example.com
 ```
 
-> **Note:** If Redis credentials are not provided, the app falls back to an in-memory store. Data will reset on server restart. This is fine for local development.
+> **Note:** If Redis credentials are not provided, the app falls back to an in-memory store. Data will reset on server restart. This is fine for local development, but in production push subscriptions will disappear on every deploy without Redis.
 
 ### 3. Run the development server
 
@@ -207,12 +213,17 @@ npm start
 2. Create a new Redis database
 3. Copy the REST URL and token into `.env.local`
 
-### OneSignal
+### Web Push (VAPID)
 
-1. Create a free account at [onesignal.com](https://onesignal.com)
-2. Create a new Web Push app
-3. Copy the App ID and REST API Key into `.env.local`
-4. Make sure your app domain is configured in OneSignal settings
+No third-party account needed. Push runs on the web standard.
+
+1. Generate a keypair once:
+   ```bash
+   node -e "console.log(require('web-push').generateVAPIDKeys())"
+   ```
+2. Paste the two values into `.env.local` as `NEXT_PUBLIC_VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`.
+3. Set `VAPID_CONTACT` to a `mailto:` string — push services use it for abuse contact.
+4. Add the same three variables to your Vercel project settings (and re-deploy).
 
 ---
 
@@ -220,20 +231,26 @@ npm start
 
 1. Push the project to a GitHub repository
 2. Import the repository in [Vercel](https://vercel.com)
-3. Add all environment variables in the Vercel project settings
+3. Add all environment variables in the Vercel project settings (Upstash + VAPID)
 4. Deploy — Vercel handles the rest
 
-> The `Service-Worker-Allowed` header required by OneSignal is already configured in `next.config.ts`.
+> The service worker (`/sw.js`) is served with `Service-Worker-Allowed: /` by `next.config.ts`, so it controls the whole origin.
 
 ---
 
 ## PWA / Mobile Install
 
-Shinoon is a Progressive Web App. On mobile:
+Shinoon is a Progressive Web App.
 
-- Open the driver view in a browser
-- Use "Add to Home Screen" to install as a native-like app
-- Push notifications work even when the app is in the background
+**Android (Chrome / Edge):** push works in the browser tab. Tapping "Add to Home Screen" is optional but gives a full-screen experience.
+
+**iOS (Safari, 16.4+):** push only works when the site is launched as an installed PWA. The driver must:
+1. Open the driver view in Safari
+2. Tap the Share button → "Add to Home Screen"
+3. Launch the app from the Home Screen icon
+4. Tap "Start Shift" — Safari will prompt for notification permission
+
+Without this step the driver view will display a clear Hebrew hint telling the user to install the app first.
 
 ---
 
@@ -247,20 +264,29 @@ type Mission = {
   passengers: number
   priority: "low" | "normal" | "high" | "urgent"
   status: "pending" | "accepted" | "en_route" | "completed" | "cancelled"
-  assigned_driver_id?: string
   broadcast: boolean
+  assigned_driver_id: string | null
   created_by: string
   created_at: string
   updated_at: string
+  accepted_at: string | null
+  completed_at: string | null
 }
 
 type User = {
   id: string
-  name: string
+  full_name: string
   role: "manager" | "driver"
-  rank?: string
+  phone: string | null
   status: "available" | "on_mission" | "offline"
-  onesignal_player_id?: string
+  created_at: string
+}
+
+type StoredPushSubscription = {
+  endpoint: string
+  keys: { p256dh: string; auth: string }
+  created_at: string
+  user_agent: string | null
 }
 ```
 

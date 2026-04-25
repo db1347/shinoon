@@ -1,9 +1,20 @@
 // app/api/missions/route.ts
+// GET  — list missions (optionally filtered by status and/or driver)
+// POST — create a new mission and notify all connected drivers
+
 import { NextRequest, NextResponse } from "next/server";
 import { getMissions, createMission } from "@/lib/localDb";
-import { pushMissionNotification } from "@/lib/onesignal";
+import { sendPushToAll } from "@/lib/push";
 import { notifyClients } from "@/app/api/missions/stream/route";
-import type { CreateMissionBody, Mission, MissionStatus, ApiResponse } from "@/lib/types";
+import { createLogger } from "@/lib/logger";
+import type {
+  CreateMissionBody,
+  Mission,
+  MissionStatus,
+  ApiResponse,
+} from "@/lib/types";
+
+const log = createLogger("api:missions");
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(req.url);
@@ -16,24 +27,67 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
     return NextResponse.json({ data: missions, error: null });
   } catch (err) {
-    console.error("[GET /api/missions]", err);
-    return NextResponse.json({ data: null, error: "Failed to fetch missions." }, { status: 500 });
+    log.error("GET /api/missions failed", err);
+    return NextResponse.json(
+      { data: null, error: "Failed to fetch missions." },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<Mission>>> {
+export async function POST(
+  req: NextRequest
+): Promise<NextResponse<ApiResponse<Mission>>> {
   let body: CreateMissionBody;
-  try { body = await req.json(); }
-  catch { return NextResponse.json({ data: null, error: "Invalid JSON body." }, { status: 400 }); }
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { data: null, error: "Invalid JSON body." },
+      { status: 400 }
+    );
+  }
 
-  const { pickup_location, destination, passengers, created_by, priority, assigned_driver_id, broadcast } = body;
+  const {
+    pickup_location,
+    destination,
+    passengers,
+    created_by,
+    priority,
+    assigned_driver_id,
+    broadcast,
+  } = body;
 
-  if (!pickup_location?.trim())  return NextResponse.json({ data: null, error: "pickup_location is required." }, { status: 400 });
-  if (!destination?.trim())      return NextResponse.json({ data: null, error: "destination is required."     }, { status: 400 });
-  if (!created_by?.trim())       return NextResponse.json({ data: null, error: "created_by is required."      }, { status: 400 });
-  if (!passengers || passengers < 1) return NextResponse.json({ data: null, error: "passengers must be at least 1." }, { status: 400 });
-  if (broadcast && assigned_driver_id)
-    return NextResponse.json({ data: null, error: "Cannot be both broadcast and assigned." }, { status: 400 });
+  if (!pickup_location?.trim()) {
+    return NextResponse.json(
+      { data: null, error: "pickup_location is required." },
+      { status: 400 }
+    );
+  }
+  if (!destination?.trim()) {
+    return NextResponse.json(
+      { data: null, error: "destination is required." },
+      { status: 400 }
+    );
+  }
+  if (!created_by?.trim()) {
+    return NextResponse.json(
+      { data: null, error: "created_by is required." },
+      { status: 400 }
+    );
+  }
+  if (!passengers || passengers < 1) {
+    return NextResponse.json(
+      { data: null, error: "passengers must be at least 1." },
+      { status: 400 }
+    );
+  }
+  if (broadcast && assigned_driver_id) {
+    return NextResponse.json(
+      { data: null, error: "Cannot be both broadcast and assigned." },
+      { status: 400 }
+    );
+  }
 
   try {
     const mission = await createMission({
@@ -49,13 +103,25 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<M
       accepted_at:        null,
       completed_at:       null,
     });
-    // Instant SSE push to all connected driver tabs
+
+    // In-process SSE refresh for any currently-open driver tabs.
     notifyClients();
-    // Await the OneSignal push — must complete before response returns in serverless
-    await pushMissionNotification(pickup_location.trim());
+
+    // Serverless: await the push fan-out so the function doesn't get killed
+    // mid-request. Push is fast (parallel fetches) so this is acceptable.
+    await sendPushToAll({
+      title: "שינוע חדש התקבל",
+      body:  `איסוף: ${mission.pickup_location} → ${mission.destination}`,
+      url:   "/driver",
+      tag:   `mission-${mission.id}`,
+    });
+
     return NextResponse.json({ data: mission, error: null }, { status: 201 });
   } catch (err) {
-    console.error("[POST /api/missions]", err);
-    return NextResponse.json({ data: null, error: "Failed to create mission." }, { status: 500 });
+    log.error("POST /api/missions failed", err);
+    return NextResponse.json(
+      { data: null, error: "Failed to create mission." },
+      { status: 500 }
+    );
   }
 }

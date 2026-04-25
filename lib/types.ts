@@ -5,7 +5,7 @@ export type UserStatus = "available" | "on_mission" | "offline";
 export type MissionPriority = "low" | "normal" | "high" | "urgent";
 export type MissionStatus = "pending" | "accepted" | "en_route" | "completed" | "cancelled";
 
-// Driver can now mark directly as completed (no accept/en_route steps)
+// Driver can mark a mission directly as completed (no accept/en_route steps).
 export const DRIVER_STATUS_TRANSITIONS: Record<MissionStatus, MissionStatus[]> = {
   pending:   ["completed"],
   accepted:  ["completed"],
@@ -66,6 +66,25 @@ export interface UpdateMissionStatusBody {
   driver_id?: string;
   caller_role?: "manager" | "driver";
 }
+
+// ── Web Push subscriptions ─────────────────────────────────────────────────
+
+/**
+ * Serialisable form of a browser PushSubscription. Matches the JSON shape
+ * returned by `subscription.toJSON()` so we can round-trip it through Redis.
+ */
+export interface StoredPushSubscription {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  // Metadata we tack on for debugging / cleanup.
+  created_at: string;
+  user_agent: string | null;
+}
+
+// ── API envelope ───────────────────────────────────────────────────────────
 
 export interface ApiSuccess<T> { data: T; error: null; }
 export interface ApiError { data: null; error: string; }

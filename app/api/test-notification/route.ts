@@ -1,50 +1,41 @@
-// app/api/test-notification/route.ts — debug route, returns full OneSignal response
+// app/api/test-notification/route.ts
+// POST — fan out a test notification to every stored push subscription.
+
 import { NextResponse } from "next/server";
+import { sendPushToAll } from "@/lib/push";
+import { getPushSubscriptions } from "@/lib/localDb";
+import type { ApiResponse } from "@/lib/types";
 
-export async function POST() {
-  const appId  = process.env.ONESIGNAL_APP_ID;
-  const apiKey = process.env.ONESIGNAL_REST_API_KEY;
+interface TestResult {
+  sent: number;
+  failed: number;
+  removedExpired: number;
+  subscribers: number;
+  vapidConfigured: boolean;
+}
 
-  if (!appId || !apiKey) {
-    return NextResponse.json({
-      ok: false,
-      error: "missing env vars",
-      appIdSet: !!appId,
-      apiKeySet: !!apiKey,
-    }, { status: 500 });
-  }
+export async function POST(): Promise<NextResponse<ApiResponse<TestResult>>> {
+  const vapidConfigured =
+    !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY &&
+    !!process.env.VAPID_PRIVATE_KEY;
 
-  const payload = {
-    app_id:            appId,
-    target_channel:    "push",
-    included_segments: ["Total Subscriptions"],
-    headings:          { en: "TEST" },
-    contents:          { en: "בדיקת התראה" },
-    url:               "https://shinoon.vercel.app/driver",
-  };
+  const subscribers = (await getPushSubscriptions()).length;
 
-  try {
-    const res = await fetch("https://api.onesignal.com/notifications?c=push", {
-      method: "POST",
-      headers: {
-        "Authorization": `Key ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
+  const result = await sendPushToAll({
+    title: "בדיקת התראה",
+    body:  "אם אתה רואה את זה — ההתראות עובדות",
+    url:   "/driver",
+    tag:   "shinoon-test",
+  });
 
-    const text = await res.text();
-
-    return NextResponse.json({
-      ok: res.ok,
-      status: res.status,
-      onesignalResponse: text,
-      payloadSent: payload,
-    });
-  } catch (err) {
-    return NextResponse.json({
-      ok: false,
-      error: String(err),
-    }, { status: 500 });
-  }
+  return NextResponse.json({
+    data: {
+      sent: result.sent,
+      failed: result.failed,
+      removedExpired: result.removedExpired,
+      subscribers,
+      vapidConfigured,
+    },
+    error: null,
+  });
 }

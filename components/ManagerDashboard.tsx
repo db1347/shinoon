@@ -2,19 +2,13 @@
 
 import React, { useState, useEffect, useCallback, useReducer, useRef } from "react";
 
+import type { Mission, MissionStatus, MissionPriority } from "@/lib/types";
+
 // ---------------------------------------------------------------------------
-// Types
+// Local aliases
 // ---------------------------------------------------------------------------
 
-type MissionStatus = "pending" | "accepted" | "en_route" | "completed" | "cancelled";
-type Priority = "low" | "normal" | "high" | "urgent";
-
-interface Mission {
-  id: string; pickup_location: string; destination: string; passengers: number;
-  priority: Priority; status: MissionStatus; assigned_driver_id?: string; broadcast: boolean;
-  created_by: string; created_at: string; updated_at: string;
-  accepted_at?: string; completed_at?: string;
-}
+type Priority = MissionPriority;
 
 // ---------------------------------------------------------------------------
 // Theme
@@ -123,12 +117,11 @@ function useActiveMissions() {
   const [missions, dispatch] = useReducer(missionReducer, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [lastRefresh, setLastRefresh] = useState(new Date());
 
   const load = useCallback(async () => {
     try {
       dispatch({ type: "SET", payload: await fetchMissions() });
-      setLastRefresh(new Date()); setError(null);
+      setError(null);
     } catch { setError("שגיאה בטעינת שינועים"); }
     finally  { setLoading(false); }
   }, []);
@@ -141,7 +134,7 @@ function useActiveMissions() {
 
   const addMission    = useCallback((m: Mission) => dispatch({ type: "ADD", payload: m }), []);
   const cancelMission = useCallback(async (id: string, ms: Mission[]) => {
-    const m = ms.find(m => m.id === id);
+    const m = ms.find(x => x.id === id);
     if (!m) return;
     dispatch({ type: "UPDATE", payload: { ...m, status: "cancelled" } });
     try {
@@ -153,7 +146,7 @@ function useActiveMissions() {
     } catch { /* next poll restores */ }
   }, []);
 
-  return { missions, loading, error, lastRefresh, addMission, cancelMission };
+  return { missions, loading, error, addMission, cancelMission };
 }
 
 // ---------------------------------------------------------------------------
@@ -376,8 +369,8 @@ function ManagerMissionCard({ mission, onCancel, t }: {
 // Active Mission Cards
 // ---------------------------------------------------------------------------
 
-function ActiveMissionCards({ missions, loading, lastRefresh, onCancel, onAddMission, t }: {
-  missions: Mission[]; loading: boolean; lastRefresh: Date;
+function ActiveMissionCards({ missions, loading, onCancel, onAddMission, t }: {
+  missions: Mission[]; loading: boolean;
   onCancel: (id: string) => void; onAddMission: () => void; t: Th;
 }) {
   const active = missions
@@ -540,7 +533,7 @@ function Header({ activeMissionCount, t, onToggle }: { activeMissionCount: numbe
 export default function ManagerDashboard() {
   const [dark, setDark] = useState(true);
   const t = getTheme(dark);
-  const { missions, loading, error, lastRefresh, addMission, cancelMission } = useActiveMissions();
+  const { missions, loading, error, addMission, cancelMission } = useActiveMissions();
   const activeMissionCount = missions.filter(m => (["pending","accepted","en_route"] as MissionStatus[]).includes(m.status)).length;
   const handleCancel = useCallback((id: string) => cancelMission(id, missions), [cancelMission, missions]);
   const [mobileTab, setMobileTab] = useState<"missions" | "dispatch">("missions");
@@ -555,7 +548,6 @@ export default function ManagerDashboard() {
     <ActiveMissionCards
       missions={missions}
       loading={loading}
-      lastRefresh={lastRefresh}
       onCancel={handleCancel}
       onAddMission={() => setMobileTab("dispatch")}
       t={t}

@@ -13,7 +13,8 @@
       "WebSearch",
       "Bash(node -e \":*)",
       "Bash(python3 -c \":*)",
-      "WebFetch(domain:documentation.onesignal.com)"
+      "WebFetch(domain:documentation.onesignal.com)",
+      "Bash(find /Users/danielbenin/Documents/code projects/Shinoon -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" \\\\\\) ! -path \"*/node_modules/*\" ! -path \"*/.next/*\" -exec wc -l {} +)"
     ]
   }
 }
